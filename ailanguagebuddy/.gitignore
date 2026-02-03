@@ -34,3 +34,5 @@ build/
 
 ### Local config (secrets) - copy from application.properties.example and fill in ###
 application-local.properties
+.env
+.env.local

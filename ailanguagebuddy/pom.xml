@@ -60,11 +60,6 @@
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-jpa</artifactId>
-		</dependency>
-		<!-- DB/JPA eliminate pentru thin backend -->
     </dependencies>
 	<dependencyManagement>
 		<dependencies>
