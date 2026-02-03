@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'features/chat/presentation/chat_screen.dart';
+import 'core/config.dart';
+import 'features/auth/presentation/auth_gate.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: '.env').catchError((_) {}); // Optional env override
+  await dotenv.load(fileName: '.env').catchError((_) {});
+  if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
+    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+  }
   runApp(const ProviderScope(child: AiLanguageApp()));
 }
 
@@ -22,7 +27,7 @@ class AiLanguageApp extends StatelessWidget {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.system,
-      home: const ChatScreen(),
+      home: const AuthGate(),
     );
   }
 }

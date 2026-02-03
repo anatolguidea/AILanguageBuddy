@@ -14,6 +14,23 @@ String get defaultBackendBaseUrl {
   );
 }
 
+/// Supabase project URL and anon key (from .env: SUPABASE_URL, SUPABASE_ANON_KEY).
+String get supabaseUrl {
+  try {
+    final v = dotenv.env['SUPABASE_URL'];
+    if (v != null && v.isNotEmpty) return v;
+  } catch (_) {}
+  return const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+}
+
+String get supabaseAnonKey {
+  try {
+    final v = dotenv.env['SUPABASE_ANON_KEY'];
+    if (v != null && v.isNotEmpty) return v;
+  } catch (_) {}
+  return const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+}
+
 /// API endpoints used across features.
 class ApiRoutes {
   static String chatAsk() => '$defaultBackendBaseUrl/api/v1/chat/ask';

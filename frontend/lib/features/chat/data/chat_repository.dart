@@ -21,13 +21,17 @@ class ChatRepository {
     return e.toString();
   }
 
-  Future<ChatMessage> sendMessage(String text) async {
+  Future<ChatMessage> sendMessage(String text, {String? userId}) async {
     final url = ApiRoutes.chatAsk();
+    final headers = <String, String>{
+      'Content-Type': 'text/plain',
+      if (userId != null && userId.isNotEmpty) 'X-User-Id': userId,
+    };
     late final http.Response response;
     try {
       response = await _client.post(
         Uri.parse(url),
-        headers: {'Content-Type': 'text/plain'},
+        headers: headers,
         body: text,
       );
     } on SocketException catch (e) {
@@ -36,6 +40,9 @@ class ChatRepository {
       throw Exception(_wrapConnectionError(e, url));
     }
 
+    if (response.statusCode == 401) {
+      throw Exception('Please sign in again.');
+    }
     if (response.statusCode != 200) {
       throw Exception('Server responded with ${response.statusCode}');
     }
@@ -49,8 +56,15 @@ class ChatRepository {
     );
   }
 
-  Future<List<ChatMessage>> fetchHistory({int limit = 50}) async {
-    final response = await _client.get(Uri.parse(ApiRoutes.chatHistory(limit: limit)));
+  Future<List<ChatMessage>> fetchHistory({int limit = 50, String? userId}) async {
+    final uri = Uri.parse(ApiRoutes.chatHistory(limit: limit));
+    final headers = <String, String>{
+      if (userId != null && userId.isNotEmpty) 'X-User-Id': userId,
+    };
+    final response = await _client.get(uri, headers: headers.isEmpty ? null : headers);
+    if (response.statusCode == 401) {
+      throw Exception('Please sign in again.');
+    }
     if (response.statusCode != 200) {
       throw Exception('Failed to load history');
     }

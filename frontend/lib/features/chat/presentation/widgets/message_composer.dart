@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_spacing.dart';
+
+/// Reusable message input bar: rounded field + send button.
 class MessageComposer extends StatefulWidget {
-  const MessageComposer({super.key, required this.onSend, this.isSending = false});
+  const MessageComposer({
+    super.key,
+    required this.onSend,
+    this.isSending = false,
+    this.hintText = 'Message your AI coach…',
+  });
 
   final void Function(String text) onSend;
   final bool isSending;
+  final String hintText;
 
   @override
   State<MessageComposer> createState() => _MessageComposerState();
@@ -28,34 +37,61 @@ class _MessageComposerState extends State<MessageComposer> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return SafeArea(
-      minimum: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              minLines: 1,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                hintText: 'Message your AI coach…',
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.md),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                minLines: 1,
+                maxLines: 4,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  hintText: widget.hintText,
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerHighest,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: 12,
+                  ),
+                ),
+                onSubmitted: (_) => _submit(),
               ),
-              onSubmitted: (_) => _submit(),
             ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            onPressed: widget.isSending ? null : _submit,
-            icon: widget.isSending
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.send),
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ],
+            const SizedBox(width: AppSpacing.sm),
+            Material(
+              color: theme.colorScheme.primary,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+              child: InkWell(
+                onTap: widget.isSending ? null : _submit,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                child: SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: widget.isSending
+                      ? Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: theme.colorScheme.onPrimary,
+                          ),
+                        )
+                      : Icon(Icons.send_rounded, color: theme.colorScheme.onPrimary),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../auth/presentation/auth_state.dart';
 import '../data/chat_repository.dart';
 import '../domain/chat_message.dart';
 import 'chat_state.dart';
@@ -16,10 +17,12 @@ class ChatController extends StateNotifier<ChatState> {
 
   final Ref _ref;
 
+  String? get _userId => _ref.read(authUserProvider).value?.id;
+
   Future<void> loadHistory() async {
     state = state.copyWith(isLoadingHistory: true, error: null);
     try {
-      final history = await _ref.read(chatRepositoryProvider).fetchHistory();
+      final history = await _ref.read(chatRepositoryProvider).fetchHistory(userId: _userId);
       state = state.copyWith(messages: history, isLoadingHistory: false);
     } catch (e) {
       state = state.copyWith(isLoadingHistory: false, error: _errorMessage(e));
@@ -42,7 +45,7 @@ class ChatController extends StateNotifier<ChatState> {
     );
 
     try {
-      final reply = await _ref.read(chatRepositoryProvider).sendMessage(text);
+      final reply = await _ref.read(chatRepositoryProvider).sendMessage(text, userId: _userId);
       state = state.copyWith(
         messages: [...state.messages, reply],
         isSending: false,
@@ -53,6 +56,10 @@ class ChatController extends StateNotifier<ChatState> {
         error: _errorMessage(e),
       );
     }
+  }
+
+  void clearError() {
+    state = state.copyWith(error: null);
   }
 
   static String _errorMessage(Object e) {

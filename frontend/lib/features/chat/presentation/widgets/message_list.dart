@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_spacing.dart';
 import '../../domain/chat_message.dart';
 import 'chat_bubble.dart';
 
+/// Scrollable list of chat bubbles; reversed so latest is at bottom.
 class MessageList extends StatelessWidget {
   const MessageList({super.key, required this.messages});
 
@@ -11,9 +13,16 @@ class MessageList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      reverse: true,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.md,
+      ),
       itemCount: messages.length,
-      itemBuilder: (context, index) => ChatBubble(message: messages[index]),
+      itemBuilder: (context, index) {
+        final message = messages[messages.length - 1 - index];
+        return ChatBubble(message: message);
+      },
     );
   }
 }

@@ -3,7 +3,9 @@ package com.example.ailanguagebuddy.model;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "chat_messages")
@@ -18,15 +20,24 @@ public class ChatMessage {
     @Column(columnDefinition = "TEXT")
     private String content;
 
-    private String role; // 'user' sau 'assistant'
+    private String role; // 'user' or 'assistant'
 
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    // Constructor gol necesar pentru JPA
+    /** Supabase auth.users.id (UUID); scopes messages per user. */
+    @Column(columnDefinition = "uuid", name = "user_id")
+    private UUID userId;
+
     public ChatMessage() {}
 
     public ChatMessage(String content, String role) {
         this.content = content;
         this.role = role;
+    }
+
+    public ChatMessage(String content, String role, UUID userId) {
+        this.content = content;
+        this.role = role;
+        this.userId = userId;
     }
 }

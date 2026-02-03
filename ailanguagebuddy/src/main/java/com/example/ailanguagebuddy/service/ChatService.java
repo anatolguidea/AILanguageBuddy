@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Collections;
+import java.util.UUID;
 
 @Service
 public class ChatService {
@@ -24,31 +25,31 @@ public class ChatService {
     }
 
     /**
-     * Trimite mesajul către Groq folosind un System Prompt pentru a ghida comportamentul AI-ului.
+     * Sends the message to Groq and persists user/assistant messages for the given user.
      */
-    public String askLanguageCoach(String userMessage) {
+    public String askLanguageCoach(String userMessage, UUID userId) {
         var systemInstructions = new SystemMessage("Ești un profesor de limbi străine prietenos și experimentat. " +
                 "Corectezi greșelile gramaticale, răspunzi politicos în limba primită și dai o singură explicație scurtă când corectezi.");
         var userMsg = new UserMessage(userMessage);
         Prompt prompt = new Prompt(List.of(systemInstructions, userMsg));
 
         try {
-            repository.save(new ChatMessage(userMessage, "user"));
+            repository.save(new ChatMessage(userMessage, "user", userId));
 
             String aiResponse = chatModel.call(prompt)
                     .getResult()
                     .getOutput()
                     .getText();
 
-            repository.save(new ChatMessage(aiResponse, "assistant"));
+            repository.save(new ChatMessage(aiResponse, "assistant", userId));
             return aiResponse;
         } catch (Exception e) {
             return "Eroare AI: " + e.getMessage();
         }
     }
 
-    public List<ChatMessage> loadHistory(int limit) {
-        var items = repository.findAllByOrderByCreatedAtDesc(PageRequest.of(0, limit));
+    public List<ChatMessage> loadHistory(UUID userId, int limit) {
+        var items = repository.findByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(0, limit));
         Collections.reverse(items);
         return items;
     }

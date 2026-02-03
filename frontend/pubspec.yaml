@@ -38,6 +38,7 @@ dependencies:
   flutter_riverpod: ^2.5.1
   google_fonts: ^6.2.1
   flutter_dotenv: ^5.1.0
+  supabase_flutter: ^2.8.0
 
 dev_dependencies:
   flutter_test:
@@ -62,8 +63,8 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - .env   # Uncomment and create .env (e.g. BACKEND_BASE_URL=http://YOUR_IP:8080) for device testing
+  assets:
+    - .env
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
 
