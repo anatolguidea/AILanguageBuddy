@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../home/presentation/home_screen.dart';
 import 'auth_state.dart';
 import 'sign_in_screen.dart';
 import '../../shell/presentation/splash_screen.dart';
 
-/// Shows SignInScreen when not authenticated, otherwise [child] (e.g. ChatScreen).
+/// Shows SignInScreen when not authenticated.
 class AuthGate extends ConsumerWidget {
   const AuthGate({super.key, this.child});
 
@@ -18,7 +17,9 @@ class AuthGate extends ConsumerWidget {
     return userAsync.when(
       data: (user) {
         if (user == null) return const SignInScreen();
-        return child ?? const HomeScreen();
+        // GoRouter redirect logic in app_router.dart will handle moving
+        // the user to /practice if they are logged in.
+        return child ?? const Scaffold(body: Center(child: CircularProgressIndicator()));
       },
       loading: () => const SplashScreen(),
       error: (err, _) => const SignInScreen(),

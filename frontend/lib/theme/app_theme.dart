@@ -1,55 +1,119 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'app_colors.dart';
+import '../core/constants/app_dimensions.dart';
 
 class AppTheme {
-  static ThemeData light() {
-    final base = ThemeData.light();
-    return base.copyWith(
-      colorScheme: base.colorScheme.copyWith(
-        primary: const Color(0xFF4F46E5),
-        secondary: const Color(0xFF22D3EE),
-        surface: const Color(0xFFF8FAFC),
+  // We prioritize Dark Mode for the "Premium" feel
+  static ThemeData dark() {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: AppColors.backgroundBlack,
+      primaryColor: AppColors.primary,
+      
+      colorScheme: const ColorScheme.dark(
+        primary: AppColors.primary,
+        onPrimary: AppColors.onPrimary,
+        secondary: AppColors.secondary,
+        surface: AppColors.surfaceDark,
+        background: AppColors.backgroundBlack,
+        error: AppColors.error,
       ),
-      textTheme: GoogleFonts.interTextTheme(base.textTheme),
+
+      textTheme: _textTheme(AppColors.textPrimary),
+      
       appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        elevation: 0.5,
-      ),
-      scaffoldBackgroundColor: const Color(0xFFF8FAFC),
-      inputDecorationTheme: const InputDecorationTheme(
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
-          borderSide: BorderSide.none,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        scrolledUnderElevation: 0,
+        iconTheme: IconThemeData(color: AppColors.textPrimary),
+        titleTextStyle: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          fontFamily: 'Outfit',
         ),
+      ),
+      
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: AppColors.backgroundBlack,
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: AppColors.textTertiary,
+        type: BottomNavigationBarType.fixed,
+        elevation: 0,
+      ),
+
+      elevatedButtonTheme: _elevatedButtonTheme(AppColors.primary, AppColors.onPrimary),
+      inputDecorationTheme: _inputDecorationTheme(AppColors.surfaceElevated, AppColors.textPrimary),
+      cardTheme: _cardTheme(AppColors.surfaceDark),
+    );
+  }
+
+  // Fallback light theme (optional, can be ignored if we enforce dark)
+  static ThemeData light() {
+    return dark(); // For now, we force the dark look as requested
+  }
+
+  static TextTheme _textTheme(Color color) {
+    return GoogleFonts.outfitTextTheme().apply(
+      bodyColor: color,
+      displayColor: color,
+    ).copyWith(
+      displayLarge: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.bold, color: color),
+      displayMedium: GoogleFonts.outfit(fontSize: 28, fontWeight: FontWeight.bold, color: color),
+      titleLarge: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w600, color: color),
+      titleMedium: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: color),
+      bodyLarge: GoogleFonts.outfit(fontSize: 16, color: color),
+      bodyMedium: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary),
+    );
+  }
+
+  static ElevatedButtonThemeData _elevatedButtonTheme(Color bgColor, Color fgColor) {
+    return ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: bgColor,
+        foregroundColor: fgColor,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
+        ),
+        textStyle: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold),
       ),
     );
   }
 
-  static ThemeData dark() {
-    final base = ThemeData.dark();
-    return base.copyWith(
-      colorScheme: base.colorScheme.copyWith(
-        primary: const Color(0xFF818CF8),
-        secondary: const Color(0xFF22D3EE),
-        surface: const Color(0xFF1E293B),
+  static InputDecorationTheme _inputDecorationTheme(Color fillColor, Color textColor) {
+    return InputDecorationTheme(
+      filled: true,
+      fillColor: fillColor,
+      contentPadding: const EdgeInsets.symmetric(horizontal: AppDimensions.md, vertical: AppDimensions.md),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
+        borderSide: BorderSide.none,
       ),
-      textTheme: GoogleFonts.interTextTheme(base.textTheme),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF0F172A),
-        foregroundColor: Colors.white,
-        elevation: 0,
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
+        borderSide: BorderSide.none,
       ),
-      scaffoldBackgroundColor: const Color(0xFF0F172A),
-      inputDecorationTheme: const InputDecorationTheme(
-        filled: true,
-        fillColor: Color(0xFF334155),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
-          borderSide: BorderSide.none,
-        ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
+        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+      ),
+      labelStyle: TextStyle(color: AppColors.textSecondary),
+      hintStyle: TextStyle(color: AppColors.textTertiary),
+    );
+  }
+
+  static CardThemeData _cardTheme(Color color) {
+    return CardThemeData(
+      color: color,
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppDimensions.radiusLg), // Larger radius for modern look
       ),
     );
   }

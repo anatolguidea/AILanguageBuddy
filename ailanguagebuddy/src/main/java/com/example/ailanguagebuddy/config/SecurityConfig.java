@@ -27,20 +27,36 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health").permitAll()
                         // protect API
                         .requestMatchers("/api/v1/**").authenticated()
-                        .anyRequest().permitAll()
-                )
+                        .anyRequest().permitAll())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
                 .build();
     }
 
     /**
-     * Custom JwtDecoder that validates Supabase access tokens using the JWKS endpoint.
+     * Custom JwtDecoder that validates Supabase access tokens using the JWKS
+     * endpoint.
      * We keep validation intentionally minimal here (signature + expiry) to avoid
      * tight coupling to issuer/audience details and keep local dev simple.
      */
     @Bean
     JwtDecoder jwtDecoder(@Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}") String jwkSetUri) {
-        return NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
+        // Configure Nimbus to use JWKS but explicitly support ES256 (for Supabase ECC
+        // keys)
+        // We also keep RS256 for backward compatibility if needed.
+        NimbusJwtDecoder delegate = NimbusJwtDecoder.withJwkSetUri(jwkSetUri)
+                .jwsAlgorithm(org.springframework.security.oauth2.jose.jws.SignatureAlgorithm.ES256)
+                // .jwsAlgorithm(SignatureAlgorithm.RS256) // Optional: If we needed both, we'd
+                // use a different builder
+                .build();
+
+        return token -> {
+            try {
+                return delegate.decode(token);
+            } catch (Exception e) {
+                System.out.println(">>> JWT DECODE ERROR (JWKS/ES256): " + e.getMessage());
+                // e.printStackTrace();
+                throw e;
+            }
+        };
     }
 }
-

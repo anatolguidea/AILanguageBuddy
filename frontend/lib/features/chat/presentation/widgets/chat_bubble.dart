@@ -1,53 +1,34 @@
 import 'package:flutter/material.dart';
+import '../../../../theme/app_colors.dart';
 
-import '../../../../core/theme/app_spacing.dart';
-import '../../domain/chat_message.dart';
-
-/// Reusable chat message bubble (user vs assistant), theme-aware.
 class ChatBubble extends StatelessWidget {
-  const ChatBubble({super.key, required this.message});
+  final String content;
+  final bool isUser;
 
-  final ChatMessage message;
+  const ChatBubble({
+    super.key,
+    required this.content,
+    required this.isUser,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isUser = message.role == 'user';
-    final theme = Theme.of(context);
-
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm + 2,
-        ),
-        constraints: const BoxConstraints(maxWidth: AppSpacing.chatBubbleMaxWidth),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: isUser
-              ? theme.colorScheme.primary
-              : theme.colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(AppSpacing.radiusMd),
-            topRight: const Radius.circular(AppSpacing.radiusMd),
-            bottomLeft: Radius.circular(isUser ? AppSpacing.radiusMd : 4),
-            bottomRight: Radius.circular(isUser ? 4 : AppSpacing.radiusMd),
+          color: isUser ? AppColors.primary : AppColors.surfaceElevated,
+          borderRadius: BorderRadius.circular(20).copyWith(
+            bottomRight: isUser ? Radius.zero : null,
+            bottomLeft: isUser ? null : Radius.zero,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: theme.colorScheme.shadow.withValues(alpha: 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
         ),
         child: Text(
-          message.text,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: isUser
-                ? theme.colorScheme.onPrimary
-                : theme.colorScheme.onSurface,
-            height: 1.4,
+          content,
+          style: TextStyle(
+            color: isUser ? AppColors.onPrimary : AppColors.textPrimary,
           ),
         ),
       ),
