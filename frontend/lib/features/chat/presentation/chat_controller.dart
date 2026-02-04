@@ -17,12 +17,12 @@ class ChatController extends StateNotifier<ChatState> {
 
   final Ref _ref;
 
-  String? get _userId => _ref.read(authUserProvider).value?.id;
+  String? get _accessToken => _ref.read(authRepositoryProvider).currentSession?.accessToken;
 
   Future<void> loadHistory() async {
     state = state.copyWith(isLoadingHistory: true, error: null);
     try {
-      final history = await _ref.read(chatRepositoryProvider).fetchHistory(userId: _userId);
+      final history = await _ref.read(chatRepositoryProvider).fetchHistory(accessToken: _accessToken);
       state = state.copyWith(messages: history, isLoadingHistory: false);
     } catch (e) {
       state = state.copyWith(isLoadingHistory: false, error: _errorMessage(e));
@@ -45,7 +45,7 @@ class ChatController extends StateNotifier<ChatState> {
     );
 
     try {
-      final reply = await _ref.read(chatRepositoryProvider).sendMessage(text, userId: _userId);
+      final reply = await _ref.read(chatRepositoryProvider).sendMessage(text, accessToken: _accessToken);
       state = state.copyWith(
         messages: [...state.messages, reply],
         isSending: false,

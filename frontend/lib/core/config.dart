@@ -35,5 +35,5 @@ String get supabaseAnonKey {
 class ApiRoutes {
   static String chatAsk() => '$defaultBackendBaseUrl/api/v1/chat/ask';
   static String chatHistory({int limit = 50}) =>
-      '$defaultBackendBaseUrl/api/v1/chat/history?limit=$limit';
+      '$defaultBackendBaseUrl/api/v1/chat/history/v2?limit=$limit';
 }

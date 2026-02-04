@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../chat/presentation/chat_screen.dart';
+import '../../home/presentation/home_screen.dart';
 import 'auth_state.dart';
 import 'sign_in_screen.dart';
+import '../../shell/presentation/splash_screen.dart';
 
 /// Shows SignInScreen when not authenticated, otherwise [child] (e.g. ChatScreen).
 class AuthGate extends ConsumerWidget {
@@ -17,11 +18,9 @@ class AuthGate extends ConsumerWidget {
     return userAsync.when(
       data: (user) {
         if (user == null) return const SignInScreen();
-        return child ?? const ChatScreen();
+        return child ?? const HomeScreen();
       },
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
+      loading: () => const SplashScreen(),
       error: (err, _) => const SignInScreen(),
     );
   }

@@ -1,51 +1,114 @@
 package com.example.ailanguagebuddy.controller;
 
+import com.example.ailanguagebuddy.api.dto.ChatAskRequest;
+import com.example.ailanguagebuddy.api.dto.ChatAskResponse;
+import com.example.ailanguagebuddy.api.dto.ChatMessageDto;
+import com.example.ailanguagebuddy.api.dto.ChatHistoryResponse;
+import com.example.ailanguagebuddy.api.dto.CorrectionDto;
+import com.example.ailanguagebuddy.api.dto.VocabularyItemDto;
+import com.example.ailanguagebuddy.security.AuthUserResolver;
 import com.example.ailanguagebuddy.service.ChatService;
+import com.example.ailanguagebuddy.domain.LearningContext;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
-import java.util.UUID;
+import java.util.List;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 
 @RestController
 @RequestMapping("/api/v1/chat")
-@CrossOrigin(origins = "*")
 public class ChatController {
 
     private final ChatService chatService;
+    private final AuthUserResolver authUserResolver;
 
-    public ChatController(ChatService chatService) {
+    public ChatController(ChatService chatService, AuthUserResolver authUserResolver) {
         this.chatService = chatService;
+        this.authUserResolver = authUserResolver;
     }
 
     @PostMapping("/ask")
-    public ResponseEntity<String> ask(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
-            @RequestBody String message) {
-        UUID userUuid = parseUserId(userId);
-        if (userUuid == null) {
-            return ResponseEntity.status(401).body("Missing or invalid X-User-Id header (must be a UUID)");
-        }
-        String response = chatService.askLanguageCoach(message, userUuid);
-        return ResponseEntity.ok(response);
+    public ResponseEntity<ChatAskResponse> ask(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody ChatAskRequest request
+    ) {
+        var user = authUserResolver.fromJwt(jwt);
+        var ctx = new LearningContext(
+                request.targetLanguage(),
+                request.nativeLanguage(),
+                request.level(),
+                request.mode()
+        );
+        var result = chatService.askLanguageCoach(request.message(), user.userId(), ctx);
+        var correctionsDto = result.corrections().stream()
+                .map(c -> new CorrectionDto(c.original(), c.corrected(), c.explanation()))
+                .toList();
+        var vocabDto = result.vocabulary().stream()
+                .map(v -> new VocabularyItemDto(v.term(), v.translation(), v.note()))
+                .toList();
+        return ResponseEntity.ok(new ChatAskResponse(result.replyText(), correctionsDto, vocabDto));
     }
 
     @GetMapping("/history")
-    public ResponseEntity<?> history(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
-            @RequestParam(defaultValue = "50") int limit) {
-        UUID userUuid = parseUserId(userId);
-        if (userUuid == null) {
-            return ResponseEntity.status(401).body("Missing or invalid X-User-Id header (must be a UUID)");
-        }
-        return ResponseEntity.ok(chatService.loadHistory(userUuid, limit));
+    public ResponseEntity<List<ChatMessageDto>> history(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(defaultValue = "50") int limit
+    ) {
+        var user = authUserResolver.fromJwt(jwt);
+        var items = chatService.loadHistory(user.userId(), limit).stream()
+                .map(m -> new ChatMessageDto(
+                        m.getId(),
+                        m.getContent(),
+                        m.getRole(),
+                        m.getCreatedAt(),
+                        m.getUserId()
+                ))
+                .toList();
+        return ResponseEntity.ok(items);
     }
 
-    private static UUID parseUserId(String userId) {
-        if (userId == null || userId.isBlank()) return null;
-        try {
-            return UUID.fromString(userId.trim());
-        } catch (IllegalArgumentException e) {
-            return null;
+    @GetMapping("/history/v2")
+    public ResponseEntity<ChatHistoryResponse> historyV2(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(name = "cursor", required = false) String cursor
+    ) {
+        var user = authUserResolver.fromJwt(jwt);
+        LocalDateTime before = null;
+        if (cursor != null && !cursor.isBlank()) {
+            try {
+                before = LocalDateTime.parse(cursor);
+            } catch (DateTimeParseException e) {
+                throw new IllegalArgumentException("Invalid cursor format, expected ISO-8601 timestamp");
+            }
         }
+
+        var raw = chatService.loadHistoryPage(user.userId(), limit, before);
+        boolean hasMore = raw.size() > limit;
+        var pageItems = hasMore ? raw.subList(0, limit) : raw;
+
+        // reverse for chronological order (oldest first)
+        var items = pageItems.stream()
+                .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()))
+                .map(m -> new ChatMessageDto(
+                        m.getId(),
+                        m.getContent(),
+                        m.getRole(),
+                        m.getCreatedAt(),
+                        m.getUserId()
+                ))
+                .toList();
+
+        String nextCursor = null;
+        if (hasMore && !items.isEmpty()) {
+            // earliest item in this page becomes the "before" cursor for the next page
+            var earliest = items.get(0).createdAt();
+            nextCursor = earliest != null ? earliest.toString() : null;
+        }
+
+        return ResponseEntity.ok(new ChatHistoryResponse(items, nextCursor));
     }
 }

@@ -22,6 +22,7 @@ public class ChatMessage {
 
     private String role; // 'user' or 'assistant'
 
+    @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 
     /** Supabase auth.users.id (UUID); scopes messages per user. */
