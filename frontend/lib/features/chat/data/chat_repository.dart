@@ -24,6 +24,7 @@ class ChatRepository {
   Future<ChatMessage> sendMessage(
     String text, {
     String? accessToken,
+    String? targetLanguage,
   }) async {
     final url = ApiRoutes.chatAsk();
     final headers = <String, String>{
@@ -32,10 +33,15 @@ class ChatRepository {
     };
     late final http.Response response;
     try {
+      final body = {
+        'message': text,
+        if (targetLanguage != null) 'targetLanguage': targetLanguage,
+      };
+      
       response = await _client.post(
         Uri.parse(url),
         headers: headers,
-        body: jsonEncode({'message': text}),
+        body: jsonEncode(body),
       );
     } on SocketException catch (e) {
       throw Exception(_wrapConnectionError(e, url));

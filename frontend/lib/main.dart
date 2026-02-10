@@ -4,7 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/config.dart';
-import 'features/auth/presentation/auth_gate.dart';
+
 import 'core/router/app_router.dart';
 import 'theme/app_theme.dart';
 

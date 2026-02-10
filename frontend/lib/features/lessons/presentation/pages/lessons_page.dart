@@ -1,43 +1,52 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../theme/app_colors.dart';
 import '../../domain/entities/lesson.dart';
 import '../widgets/lesson_node.dart';
+import '../providers/lessons_provider.dart';
+import 'lesson_detail_page.dart';
 
-class LessonsPage extends StatelessWidget {
+class LessonsPage extends ConsumerWidget {
   const LessonsPage({super.key});
 
-  static const List<Lesson> mockLessons = [
-    Lesson(id: '1', title: 'Basics 1', description: 'Hello and goodbye', status: LessonStatus.completed),
-    Lesson(id: '2', title: 'Basics 2', description: 'Common phrases', status: LessonStatus.completed),
-    Lesson(id: '3', title: 'Food', description: 'Ordering at a restaurant', status: LessonStatus.available),
-    Lesson(id: '4', title: 'Travel', description: 'At the airport', status: LessonStatus.locked),
-    Lesson(id: '5', title: 'Shopping', description: 'Buying clothes', status: LessonStatus.locked),
-  ];
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lessonsAsync = ref.watch(lessonsProvider);
+
     return Scaffold(
       backgroundColor: AppColors.backgroundBlack,
       appBar: AppBar(
         title: const Text('Learning Path'),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(vertical: 40),
-        child: Center(
-          child: Column(
-            children: List.generate(mockLessons.length, (index) {
-              final lesson = mockLessons[index];
-              return LessonNode(
-                lesson: lesson,
-                isLast: index == mockLessons.length - 1,
-                onTap: () {
-                  // TODO: Open lesson details/start lesson
-                },
-              );
-            }),
+      body: lessonsAsync.when(
+        data: (lessons) => SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: 40),
+          child: Center(
+            child: Column(
+              children: List.generate(lessons.length, (index) {
+                final lesson = lessons[index];
+                return LessonNode(
+                  lesson: lesson,
+                  isLast: index == lessons.length - 1,
+                  onTap: () {
+                    if (lesson.status == LessonStatus.locked) {
+                       ScaffoldMessenger.of(context).showSnackBar(
+                         const SnackBar(content: Text('Complete previous lessons to unlock this one.')),
+                       );
+                       return;
+                    }
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => LessonDetailPage(lesson: lesson)),
+                    );
+                  },
+                );
+              }),
+            ),
           ),
         ),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text('Error: $err')),
       ),
     );
   }

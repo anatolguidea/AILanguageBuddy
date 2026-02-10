@@ -79,9 +79,9 @@ class PracticePage extends ConsumerWidget {
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () => context.push('/chat/free_talk'),
-                  icon: const Icon(Icons.mic, color: Colors.white),
-                  label: const Text('Start free talk'),
+                  onPressed: () => context.push('/scenarios'),
+                  icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
+                  label: const Text('Start Conversation'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     padding: const EdgeInsets.symmetric(vertical: 18),

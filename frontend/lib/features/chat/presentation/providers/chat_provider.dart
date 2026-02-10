@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 import '../../data/models/chat_models.dart';
 
 // Constants
@@ -17,29 +19,106 @@ class ChatState {
   final List<Map<String, dynamic>> messages;
   final bool isLoading;
   final String? error;
+  final bool isSpeaking;
+  final bool isListening;
 
   ChatState({
     this.messages = const [],
     this.isLoading = false,
     this.error,
+    this.isSpeaking = false,
+    this.isListening = false,
   });
 
   ChatState copyWith({
     List<Map<String, dynamic>>? messages,
     bool? isLoading,
     String? error,
+    bool? isSpeaking,
+    bool? isListening,
   }) {
     return ChatState(
       messages: messages ?? this.messages,
       isLoading: isLoading ?? this.isLoading,
       error: error,
+      isSpeaking: isSpeaking ?? this.isSpeaking,
+      isListening: isListening ?? this.isListening,
     );
   }
 }
 
 // Notifier
 class ChatNotifier extends StateNotifier<ChatState> {
-  ChatNotifier() : super(ChatState(messages: [])); // Initial empty state
+  final FlutterTts _flutterTts = FlutterTts();
+  final SpeechToText _speechToText = SpeechToText();
+  
+  ChatNotifier() : super(ChatState()) {
+    _initTts();
+    _initStt();
+  }
+
+  Future<void> _initTts() async {
+    await _flutterTts.setLanguage("en-US");
+    await _flutterTts.setPitch(1.0);
+    await _flutterTts.setSpeechRate(0.5);
+    
+    _flutterTts.setStartHandler(() {
+      state = state.copyWith(isSpeaking: true);
+    });
+
+    _flutterTts.setCompletionHandler(() {
+      state = state.copyWith(isSpeaking: false);
+    });
+
+    _flutterTts.setErrorHandler((msg) {
+      state = state.copyWith(isSpeaking: false, error: "TTS Error: $msg");
+    });
+  }
+
+  Future<void> _initStt() async {
+    // Basic initialization, permission request happens on startListening
+  }
+
+  Future<void> startListening(Function(String) onResult) async {
+    try {
+      bool available = await _speechToText.initialize(
+        onStatus: (status) {
+          if (status == 'notListening') {
+            state = state.copyWith(isListening: false);
+          }
+        },
+        onError: (errorNotification) {
+          state = state.copyWith(isListening: false, error: "STT Error: ${errorNotification.errorMsg}");
+        },
+      );
+
+      if (available) {
+        state = state.copyWith(isListening: true);
+        _speechToText.listen(
+          onResult: (result) {
+             onResult(result.recognizedWords);
+          },
+        );
+      } else {
+        state = state.copyWith(error: "Speech recognition not available");
+      }
+    } catch (e) {
+      state = state.copyWith(error: "Failed to initialize STT: $e");
+    }
+  }
+
+  Future<void> stopListening() async {
+    await _speechToText.stop();
+    state = state.copyWith(isListening: false);
+  }
+
+  Future<void> speak(String text) async {
+    await _flutterTts.speak(text);
+  }
+
+  Future<void> stopSpeaking() async {
+    await _flutterTts.stop();
+  }
 
   Future<void> loadHistory() async {
     state = state.copyWith(isLoading: true, error: null);
@@ -60,40 +139,28 @@ class ChatNotifier extends StateNotifier<ChatState> {
         headers: headers,
       ).timeout(const Duration(seconds: 10));
 
-      print('History Status: ${response.statusCode}');
-      print('History Body: ${response.body}');
-
       if (response.statusCode == 200) {
-        try {
-          final data = jsonDecode(response.body);
-          final historyResponse = ChatHistoryResponse.fromJson(data);
-          print('Parsed ${historyResponse.messages.length} messages');
-          
-          final loadedMessages = historyResponse.messages.map((m) => {
-            'role': m.role == 'assistant' ? 'ai' : m.role, 
-            'content': m.content,
-          }).toList();
+        final data = jsonDecode(response.body);
+        final historyResponse = ChatHistoryResponse.fromJson(data);
+        
+        final loadedMessages = historyResponse.messages.map((m) => {
+          'role': m.role == 'assistant' ? 'ai' : m.role, 
+          'content': m.content,
+        }).toList();
 
-          state = state.copyWith(
-            messages: loadedMessages,
-            isLoading: false,
-          );
-        } catch (e, stack) {
-          print('JSON Parse Error: $e');
-          print(stack);
-          state = state.copyWith(isLoading: false, error: 'Parse Error: $e');
-        }
+        state = state.copyWith(
+          messages: loadedMessages,
+          isLoading: false,
+        );
       } else {
-        print('History Error: ${response.statusCode} - ${response.body}');
         state = state.copyWith(isLoading: false, error: 'Failed to load history');
       }
     } catch (e) {
-      print('Network Error loading history: $e');
       state = state.copyWith(isLoading: false, error: 'Network error loading history');
     }
   }
 
-  Future<void> sendMessage(String text, String scenarioId) async {
+  Future<void> sendMessage(String text, String scenarioId, String targetLanguage) async {
     if (text.trim().isEmpty) return;
 
     // Optimistic Update
@@ -111,7 +178,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
         if (token != null) 'Authorization': 'Bearer $token',
       };
 
-      final body = ChatAskRequest(message: text, mode: scenarioId).toJson();
+      final body = ChatAskRequest(
+        message: text, 
+        mode: scenarioId,
+        targetLanguage: targetLanguage,
+      ).toJson();
 
       final response = await http.post(
         Uri.parse('$kBaseUrl/ask'),
@@ -122,20 +193,23 @@ class ChatNotifier extends StateNotifier<ChatState> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final chatResponse = ChatAskResponse.fromJson(data);
+        final aiReply = chatResponse.replyText;
         
         state = state.copyWith(
-          messages: [...state.messages, {'role': 'ai', 'content': chatResponse.replyText}],
+          messages: [...state.messages, {'role': 'ai', 'content': aiReply}],
           isLoading: false,
         );
+        
+        // Auto-speak the AI response
+        speak(aiReply);
+        
       } else {
-        print('Backend Error: ${response.statusCode} - ${response.body}');
         state = state.copyWith(
            messages: [...state.messages, {'role': 'ai', 'content': 'Error: ${response.statusCode}'}],
            isLoading: false,
         );
       }
     } catch (e) {
-      print('Network Error: $e');
       state = state.copyWith(
         messages: [...state.messages, {'role': 'ai', 'content': 'Network/Connection Error'}],
         isLoading: false,

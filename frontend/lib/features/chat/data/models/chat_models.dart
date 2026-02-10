@@ -7,7 +7,7 @@ class ChatAskRequest {
 
   ChatAskRequest({
     required this.message,
-    this.targetLanguage = 'Spanish', // Default for now
+    required this.targetLanguage,
     this.nativeLanguage = 'English',
     this.level = 'Intermediate',
     this.mode = 'General',

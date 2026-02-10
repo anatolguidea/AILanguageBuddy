@@ -108,6 +108,17 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               ),
               const SizedBox(height: 24),
               AppButton(label: 'Sign in', onPressed: _submit, loading: _loading),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  await ref.read(authRepositoryProvider).signInWithGoogle();
+                },
+                icon: const Icon(Icons.login), 
+                label: const Text('Sign in with Google'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
             ],
           ),
         ),

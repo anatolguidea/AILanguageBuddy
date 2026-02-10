@@ -41,8 +41,24 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>We need permission to recognize your speech for the AI conversation.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>We need microphone access to let you talk to the AI.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>io.supabase.flutter</string>
+				<string>com.googleusercontent.apps.625932664243-88fcgj0psotsnpthoss0b9c9ah580vl8</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>

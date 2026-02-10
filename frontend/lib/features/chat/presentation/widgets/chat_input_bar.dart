@@ -6,12 +6,14 @@ class ChatInputBar extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
   final VoidCallback? onMicTap;
+  final bool isListening;
 
   const ChatInputBar({
     super.key,
     required this.controller,
     required this.onSend,
     this.onMicTap,
+    this.isListening = false,
   });
 
   @override
@@ -25,7 +27,7 @@ class ChatInputBar extends StatelessWidget {
               controller: controller,
               style: const TextStyle(color: AppColors.textPrimary),
               decoration: InputDecoration(
-                hintText: 'Type a message...',
+                hintText: isListening ? 'Listening...' : 'Type a message...',
                 filled: true,
                 fillColor: AppColors.surfaceElevated,
                 border: OutlineInputBorder(
@@ -38,12 +40,15 @@ class ChatInputBar extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.surfaceElevated,
+              color: isListening ? AppColors.error : AppColors.surfaceElevated,
             ),
             child: IconButton(
-              icon: const Icon(Icons.mic, color: AppColors.textPrimary),
+              icon: Icon(
+                isListening ? Icons.stop : Icons.mic,
+                color: isListening ? Colors.white : AppColors.textPrimary,
+              ),
               onPressed: onMicTap,
             ),
           ),
