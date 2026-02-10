@@ -29,7 +29,11 @@ public class ChatMessage {
     @Column(columnDefinition = "uuid", name = "user_id")
     private UUID userId;
 
-    public ChatMessage() {}
+    @Column(name = "mode")
+    private String mode = "general";
+
+    public ChatMessage() {
+    }
 
     public ChatMessage(String content, String role) {
         this.content = content;
@@ -40,5 +44,12 @@ public class ChatMessage {
         this.content = content;
         this.role = role;
         this.userId = userId;
+    }
+
+    public ChatMessage(String content, String role, UUID userId, String mode) {
+        this.content = content;
+        this.role = role;
+        this.userId = userId;
+        this.mode = mode;
     }
 }

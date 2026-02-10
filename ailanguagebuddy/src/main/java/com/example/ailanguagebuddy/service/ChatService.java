@@ -31,7 +31,8 @@ public class ChatService {
     private final PromptBuilder promptBuilder;
     private final ObjectMapper objectMapper;
 
-    public ChatService(ChatModel chatModel, ChatMessageRepository repository, PromptBuilder promptBuilder, ObjectMapper objectMapper) {
+    public ChatService(ChatModel chatModel, ChatMessageRepository repository, PromptBuilder promptBuilder,
+            ObjectMapper objectMapper) {
         this.chatModel = chatModel;
         this.repository = repository;
         this.promptBuilder = promptBuilder;
@@ -40,8 +41,10 @@ public class ChatService {
     }
 
     /**
-     * Sends the message to Groq and persists user/assistant messages for the given user.
-     * Returns a structured result that includes corrections and vocabulary when available.
+     * Sends the message to Groq and persists user/assistant messages for the given
+     * user.
+     * Returns a structured result that includes corrections and vocabulary when
+     * available.
      */
     public AiTutorResult askLanguageCoach(String userMessage, UUID userId, LearningContext context) {
         var systemInstructions = new SystemMessage(promptBuilder.buildSystemPrompt(context));
@@ -49,7 +52,8 @@ public class ChatService {
         Prompt prompt = new Prompt(List.of(systemInstructions, userMsg));
 
         try {
-            repository.save(new ChatMessage(userMessage, "user", userId));
+            // Save user message with mode
+            repository.save(new ChatMessage(userMessage, "user", userId, context.mode()));
 
             String rawResponse = chatModel.call(prompt)
                     .getResult()
@@ -59,7 +63,8 @@ public class ChatService {
             AiTutorResult result = parseTutorResult(rawResponse);
 
             // Persist what the user actually sees in the chat bubble.
-            repository.save(new ChatMessage(result.replyText(), "assistant", userId));
+            // Save assistant message with mode
+            repository.save(new ChatMessage(result.replyText(), "assistant", userId, context.mode()));
             return result;
         } catch (Exception e) {
             throw new RuntimeException("AI request failed", e);
@@ -67,22 +72,27 @@ public class ChatService {
     }
 
     public List<ChatMessage> loadHistory(UUID userId, int limit) {
-        var items = repository.findByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(0, limit));
+        // Default to general if not specified (legacy support)
+        return loadHistory(userId, "general", limit);
+    }
+
+    public List<ChatMessage> loadHistory(UUID userId, String mode, int limit) {
+        var items = repository.findByUserIdAndModeOrderByCreatedAtDesc(userId, mode, PageRequest.of(0, limit));
         Collections.reverse(items);
         return items;
     }
 
-    public List<ChatMessage> loadHistoryPage(UUID userId, int limit, LocalDateTime before) {
+    public List<ChatMessage> loadHistoryPage(UUID userId, String mode, int limit, LocalDateTime before) {
         int pageSize = limit + 1; // look ahead to know if there is a next page
         List<ChatMessage> items;
         if (before == null) {
-            items = repository.findByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(0, pageSize));
+            items = repository.findByUserIdAndModeOrderByCreatedAtDesc(userId, mode, PageRequest.of(0, pageSize));
         } else {
-            items = repository.findByUserIdAndCreatedAtLessThanOrderByCreatedAtDesc(
+            items = repository.findByUserIdAndModeAndCreatedAtLessThanOrderByCreatedAtDesc(
                     userId,
+                    mode,
                     before,
-                    PageRequest.of(0, pageSize)
-            );
+                    PageRequest.of(0, pageSize));
         }
         return items;
     }
@@ -97,18 +107,16 @@ public class ChatService {
                 var replyText = node.path("replyText").asText(raw);
 
                 var correctionsNode = node.path("corrections");
-                List<com.example.ailanguagebuddy.domain.Correction> corrections =
-                        correctionsNode.isArray()
-                                ? objectMapper.readerForListOf(com.example.ailanguagebuddy.domain.Correction.class)
+                List<com.example.ailanguagebuddy.domain.Correction> corrections = correctionsNode.isArray()
+                        ? objectMapper.readerForListOf(com.example.ailanguagebuddy.domain.Correction.class)
                                 .readValue(correctionsNode)
-                                : List.of();
+                        : List.of();
 
                 var vocabNode = node.path("vocabulary");
-                List<com.example.ailanguagebuddy.domain.VocabularyItem> vocabulary =
-                        vocabNode.isArray()
-                                ? objectMapper.readerForListOf(com.example.ailanguagebuddy.domain.VocabularyItem.class)
+                List<com.example.ailanguagebuddy.domain.VocabularyItem> vocabulary = vocabNode.isArray()
+                        ? objectMapper.readerForListOf(com.example.ailanguagebuddy.domain.VocabularyItem.class)
                                 .readValue(vocabNode)
-                                : List.of();
+                        : List.of();
 
                 return new AiTutorResult(replyText, corrections, vocabulary);
             }

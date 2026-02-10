@@ -120,7 +120,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     await _flutterTts.stop();
   }
 
-  Future<void> loadHistory() async {
+  Future<void> loadHistory(String scenarioId) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final token = Supabase.instance.client.auth.currentSession?.accessToken;
@@ -135,7 +135,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       };
 
       final response = await http.get(
-        Uri.parse('$kBaseUrl/history/v2?limit=50'),
+        Uri.parse('$kBaseUrl/history/v2?limit=50&mode=$scenarioId'),
         headers: headers,
       ).timeout(const Duration(seconds: 10));
 
@@ -158,6 +158,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
     } catch (e) {
       state = state.copyWith(isLoading: false, error: 'Network error loading history');
     }
+  }
+
+  void clearMessages() {
+    state = state.copyWith(messages: []);
   }
 
   Future<void> sendMessage(String text, String scenarioId, String targetLanguage) async {

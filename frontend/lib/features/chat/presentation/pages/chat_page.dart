@@ -19,13 +19,33 @@ class ChatPage extends ConsumerStatefulWidget {
 
 class _ChatPageState extends ConsumerState<ChatPage> {
   final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     Future.microtask(() {
-      ref.read(chatProvider.notifier).loadHistory();
+      final notifier = ref.read(chatProvider.notifier);
+      notifier.clearMessages(); // Clear previous chat
+      notifier.loadHistory(widget.scenarioId);
     });
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   void _sendMessage() {
@@ -35,9 +55,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     ref.read(chatProvider.notifier).sendMessage(
       _messageController.text, 
       widget.scenarioId,
-      currentLanguage.name, // Sending the name (e.g., 'Spanish') which prompt builder expects
+      currentLanguage.name, 
     );
     _messageController.clear();
+    // Scroll will be handled by listener or post-build
   }
 
   void _toggleListening(bool isListening) {
@@ -47,7 +68,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       ref.read(chatProvider.notifier).startListening((text) {
         setState(() {
           _messageController.text = text;
-          // Keep cursor at end
           _messageController.selection = TextSelection.fromPosition(
             TextPosition(offset: text.length),
           );
@@ -59,6 +79,15 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider);
+    
+    // Auto-scroll when messages change
+    ref.listen(chatProvider, (previous, next) {
+      if (next.messages.length > (previous?.messages.length ?? 0)) {
+        // Wait for list to render
+        Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+      }
+    });
+
     final messages = chatState.messages;
     final isLoading = chatState.isLoading;
     final isListening = chatState.isListening;
@@ -71,7 +100,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     } else if (isListening) {
       avatarStatus = AvatarStatus.listening;
     } else if (isLoading) {
-      // Maybe a thinking state slightly different from listening?
       avatarStatus = AvatarStatus.listening; 
     }
 
@@ -108,6 +136,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               children: [
                 Expanded(
                   child: ListView.builder(
+                    controller: _scrollController,
                     padding: const EdgeInsets.all(AppDimensions.md),
                     itemCount: messages.length,
                     itemBuilder: (context, index) {

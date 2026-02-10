@@ -55,9 +55,10 @@ public class ChatController {
         @GetMapping("/history")
         public ResponseEntity<List<ChatMessageDto>> history(
                         @AuthenticationPrincipal Jwt jwt,
-                        @RequestParam(defaultValue = "50") int limit) {
+                        @RequestParam(defaultValue = "50") int limit,
+                        @RequestParam(defaultValue = "general") String mode) {
                 var user = authUserResolver.fromJwt(jwt);
-                var items = chatService.loadHistory(user.userId(), limit).stream()
+                var items = chatService.loadHistory(user.userId(), mode, limit).stream()
                                 .map(m -> new ChatMessageDto(
                                                 m.getId(),
                                                 m.getContent(),
@@ -72,9 +73,10 @@ public class ChatController {
         public ResponseEntity<ChatHistoryResponse> historyV2(
                         @AuthenticationPrincipal Jwt jwt,
                         @RequestParam(defaultValue = "50") int limit,
-                        @RequestParam(name = "cursor", required = false) String cursor) {
+                        @RequestParam(name = "cursor", required = false) String cursor,
+                        @RequestParam(defaultValue = "general") String mode) {
                 var user = authUserResolver.fromJwt(jwt);
-                System.out.println(">>> DEBUG: /history/v2 called by User: " + user.userId());
+                System.out.println(">>> DEBUG: /history/v2 called by User: " + user.userId() + " Mode: " + mode);
 
                 LocalDateTime before = null;
                 if (cursor != null && !cursor.isBlank()) {
@@ -86,7 +88,7 @@ public class ChatController {
                         }
                 }
 
-                var raw = chatService.loadHistoryPage(user.userId(), limit, before);
+                var raw = chatService.loadHistoryPage(user.userId(), mode, limit, before);
                 System.out.println(">>> DEBUG: Found " + raw.size() + " messages for User: " + user.userId());
 
                 boolean hasMore = raw.size() > limit;
