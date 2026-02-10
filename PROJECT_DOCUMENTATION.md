@@ -174,49 +174,48 @@ A: Ensure your backend is updated with the latest `ChatController` logic that fi
 A: On Android emulator, use `10.0.2.2` instead of `localhost`. On iOS Simulator, `localhost` works. Configure `kBaseUrl` in `chat_provider.dart` appropriately.
 
 
-mplementation Plan - Phase 4: Real-time Voice Assistant ("The Orchestrator")
-Goal
-Transform the system from HTTP Request/Response to a Real-time Streaming Architecture to support low-latency voice conversations.
+### Phase 4: Real-time Voice Assistant ("The Orchestrator")
+- **Goal**: Transform the system from simple HTTP interactions to a real-time, low-latency voice architecture.
+- **Architecture**:
+    - **Flutter (Frontend)**: Captures audio via microphone stream (Raw PCM, 16kHz, 16-bit, Mono) and sends it over WebSocket. Plays back received audio chunks.
+    - **Java (Orchestrator)**: Manages WebSocket connections (`/ws/voice`). Receives audio -> Sends to Python STT -> Sends text to LLM (Groq) -> Sends LLM response to Python TTS -> Streams audio back to Flutter.
+    - **Python (Voice Service)**: A lightweight FastAPI service.
+        - **STT**: Uses `faster-whisper` (OpenAI Whisper model) for accurate speech-to-text. Handles both Raw PCM and WAV inputs robustly. 
+        - **TTS**: Uses `chatterbox-tts` (Chatterbox-Turbo, 350M parameters) for high-quality, natural-sounding voice generation.
+- **Key Technical Details**:
+    - **Robustness**: The Python service includes detailed logging and error handling, auto-detecting audio formats (RIFF headers vs Raw PCM) to prevent crashes.
+    - **Audio Format**: Standardized on **16kHz Sample Rate** for recording (Whisper native) and **24kHz** for playback (Chatterbox native).
+    - **Security**: Hugging Face token integration for model access.
+    - **Git**: Configured `.gitignore` to exclude large virtual environment files (`venv`), ensuring clean repository management.
 
-Architecture: The Orchestrator Model
-Component	Tech Stack	Role
-Frontend	Flutter	Capture microphone stream, play audio stream, UI.
-Orchestrator	Java Spring Boot	Manage WebSockets, route audio to/from Voice Engine, route text to/from LLM.
-Voice Engine	Python (FastAPI) + Chatterbox	New Service. Exposes STT/TTS via HTTP/WebSocket to the Java Orchestrator.
-Brain	Spring AI + Groq	Existing integration for intelligence.
-Note on Voice Engine: Since Chatterbox is a Python library, we cannot run it inside the Java process. We will create a lightweight Python service (using FastAPI) that wraps Chatterbox and communicates with the Java Orchestrator.
+---
 
-Step-by-Step Implementation
-1. Chatterbox Service (Python)
-Setup: Create voice-service directory.
-Dependencies: fastapi, uvicorn, chatterbox-tts, torch, torchaudio.
-Endpoints:
-POST /transcribe: Accepts audio bytes, returns text (STT).
-POST /synthesize: Accepts text, returns audio bytes (TTS).
-Model: Use Chatterbox-Turbo (350M) for low latency.
-2. Java Orchestrator (Spring Boot)
-Dependencies: Add spring-boot-starter-websocket.
-WebSocket Handler: Create /ws/voice endpoint.
-On Message (Binary): Receive audio chunk from Flutter -> Send to Python STT -> Get Text.
-Processing: Send Text to Groq (LLM) -> Get Response.
-On Response: Send Text to Python TTS -> Get Audio -> Send to Flutter via WebSocket.
-Client: WebClient or HttpClient to talk to the Python service.
-3. Frontend (Flutter)
-Dependencies: web_socket_channel, flutter_sound (or record/audioplayers for streams).
-New Screen: LiveSpeechPage (Modern, minimal UI with "Listening" state visualization).
-Audio Logic:
-Stream microphone data to WebSocket.
-Buffer and play received audio data.
-Navigation: Add "Live" tab to MainScaffold.
-4. Refactor Existing Chat
-Disable Auto-TTS: In 
-ChatNotifier
-, remove 
-speak(aiReply)
-.
-Manual Play: Add IconButton (Speaker) to ChatBubble. On tap, trigger TTS for that specific message.
-Task Breakdown
- Setup Python Voice Service: Install Chatterbox, build FastAPI wrapper.
- Update Java Backend: Configure WebSocket, implement Orchestrator logic.
- Refactor Existing Chat: Remove auto-TTS, add play button.
- Implement Frontend Audio: Build LiveSpeechPage and WebSocket integration.
+## 5. Setup & Running Voice Service
+
+To use the Real-time Voice Assistant, you must run the Python service alongside the main backend.
+
+### 1. Setup Python Environment
+Navigate to `voice-service/`:
+```bash
+cd voice-service
+chmod +x run.sh
+./run.sh
+```
+*The script will automatically create a virtual environment, install dependencies (`requirements.txt`), and start the FastAPI server on port 8000.*
+
+### 2. Connect Backend
+Ensure your Java Backend is running on port 8080. It will automatically connect to the Python service at `http://localhost:8000`.
+
+### 3. Usage
+- Open the App -> **Live Assistant** tab.
+- Hold the microphone button to speak.
+- Release to send.
+- The AI will reply with both text and voice.
+
+---
+
+## 6. Future Roadmap
+- **Gamification**: Badges, streaks, and daily goals.
+- **Spaced Repetition System (SRS)**: Flashcards for vocabulary learned in chat.
+- **Apple Sign-In**: Implement native Apple auth.
+
