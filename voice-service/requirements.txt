@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+chatterbox-tts
+torch
+torchaudio
+numpy
+python-multipart
+huggingface_hub
+faster-whisper
+soundfile

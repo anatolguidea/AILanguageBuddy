@@ -144,6 +144,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       return ChatBubble(
                         content: msg['content'] ?? '',
                         isUser: msg['role'] == 'user',
+                        onPlay: msg['role'] == 'user' 
+                            ? null 
+                            : () => ref.read(chatProvider.notifier).speak(msg['content'] ?? ''),
                       );
                     },
                   ),

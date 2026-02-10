@@ -5,10 +5,13 @@ class ChatBubble extends StatelessWidget {
   final String content;
   final bool isUser;
 
+  final VoidCallback? onPlay;
+
   const ChatBubble({
     super.key,
     required this.content,
     required this.isUser,
+    this.onPlay,
   });
 
   @override
@@ -25,11 +28,27 @@ class ChatBubble extends StatelessWidget {
             bottomLeft: isUser ? null : Radius.zero,
           ),
         ),
-        child: Text(
-          content,
-          style: TextStyle(
-            color: isUser ? AppColors.onPrimary : AppColors.textPrimary,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              content,
+              style: TextStyle(
+                color: isUser ? AppColors.onPrimary : AppColors.textPrimary,
+              ),
+            ),
+            if (!isUser && onPlay != null) ...[
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: onPlay,
+                child: Icon(
+                  Icons.volume_up_rounded,
+                  color: AppColors.textSecondary,
+                  size: 20,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

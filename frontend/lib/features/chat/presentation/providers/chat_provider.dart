@@ -7,7 +7,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import '../../data/models/chat_models.dart';
 
 // Constants
-const String kBaseUrl = 'http://localhost:8080/api/v1/chat';
+const String kBaseUrl = 'http://192.168.107.166:8080/api/v1/chat';
 
 // Provider
 final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>((ref) {
@@ -204,8 +204,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
           isLoading: false,
         );
         
-        // Auto-speak the AI response
-        speak(aiReply);
+        // Auto-speak disabled for Orchestrator phase
+        // speak(aiReply); 
         
       } else {
         state = state.copyWith(

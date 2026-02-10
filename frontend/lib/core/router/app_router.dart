@@ -12,6 +12,7 @@ import '../../features/chat/presentation/pages/chat_page.dart';
 import '../../features/lessons/presentation/pages/lessons_page.dart';
 import '../../features/scenarios/presentation/pages/scenarios_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
+import '../../features/chat/presentation/pages/live_speech_page.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
@@ -75,6 +76,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/practice',
                 builder: (context, state) => const PracticePage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/live',
+                builder: (context, state) => const LiveSpeechPage(),
               ),
             ],
           ),

@@ -42,9 +42,9 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>We need permission to recognize your speech for the AI conversation.</string>
+    <string>We need speech recognition to process your voice.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>We need microphone access to let you talk to the AI.</string>
+    <string>We need access to your microphone for voice practice.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleURLTypes</key>

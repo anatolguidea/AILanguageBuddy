@@ -47,6 +47,11 @@ class ShellPage extends StatelessWidget {
               label: 'Practice',
             ),
             NavigationDestination(
+              icon: FaIcon(FontAwesomeIcons.microphoneLines, size: 20, color: AppColors.textSecondary),
+              selectedIcon: FaIcon(FontAwesomeIcons.microphoneLines, size: 20, color: AppColors.primary),
+              label: 'Live',
+            ),
+            NavigationDestination(
               icon: FaIcon(FontAwesomeIcons.user, size: 20, color: AppColors.textSecondary),
               selectedIcon: FaIcon(FontAwesomeIcons.solidUser, size: 20, color: AppColors.primary),
               label: 'Profile',
