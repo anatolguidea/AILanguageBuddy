@@ -31,9 +31,25 @@ String get supabaseAnonKey {
   return const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
 }
 
+/// Voice service base URL (Python Chatterbox service on port 8000).
+String get voiceServiceBaseUrl {
+  try {
+    final fromEnv = dotenv.env['VOICE_SERVICE_URL'];
+    if (fromEnv != null && fromEnv.isNotEmpty) return fromEnv;
+  } catch (_) {}
+  return const String.fromEnvironment(
+    'VOICE_SERVICE_URL',
+    defaultValue: 'http://127.0.0.1:8000',
+  );
+}
+
 /// API endpoints used across features.
 class ApiRoutes {
   static String chatAsk() => '$defaultBackendBaseUrl/api/v1/chat/ask';
   static String chatHistory({int limit = 50}) =>
       '$defaultBackendBaseUrl/api/v1/chat/history/v2?limit=$limit';
+
+  // Voice / TTS
+  static String synthesizeWord({required String text, required String lang}) =>
+      '$voiceServiceBaseUrl/synthesize/word?text=${Uri.encodeComponent(text)}&lang=${Uri.encodeComponent(lang)}';
 }

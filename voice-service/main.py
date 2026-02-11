@@ -8,23 +8,42 @@ import os
 import uvicorn
 import numpy as np
 from contextlib import asynccontextmanager
-
-# Initialize API
-app = FastAPI(title="Voice Service using Chatterbox")
+from collections import OrderedDict
 
 # Global model variable
 tts_model = None
 MODEL_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+# ─── Word-level TTS cache (LRU, max 500 entries) ───────────────────
+_WORD_CACHE_MAX = 500
+_word_audio_cache: OrderedDict[str, bytes] = OrderedDict()
+
+def _cache_key(text: str, lang: str) -> str:
+    return f"{lang}:{text.lower().strip()}"
+
+def _cache_put(key: str, audio_bytes: bytes):
+    if key in _word_audio_cache:
+        _word_audio_cache.move_to_end(key)
+        return
+    _word_audio_cache[key] = audio_bytes
+    while len(_word_audio_cache) > _WORD_CACHE_MAX:
+        _word_audio_cache.popitem(last=False)
+
+def _cache_get(key: str) -> bytes | None:
+    if key in _word_audio_cache:
+        _word_audio_cache.move_to_end(key)
+        return _word_audio_cache[key]
+    return None
+
 
 # Mock Class
 class MockTTS:
     def __init__(self):
         self.sr = 24000
     
-    def generate(self, text: str):
-        # Generate 1 second of silence or white noise as placeholder
+    def generate(self, text: str, **kwargs):
         print(f"[MOCK] Generating audio for: {text}")
-        return torch.zeros(1, 24000) # 1 second of silence
+        return torch.zeros(1, 24000)  # 1 second of silence
 
 import os
 from huggingface_hub import login
@@ -43,13 +62,13 @@ async def lifespan(app: FastAPI):
     else:
         print("No valid HF_TOKEN found in environment. Model loading might fail if it is gated.")
 
-    # Load TTS model on startup
+    # Load TTS model on startup — Chatterbox Multilingual
     global tts_model, stt_model
-    print(f"Loading Chatterbox-Turbo on {MODEL_DEVICE}...")
+    print(f"Loading Chatterbox on {MODEL_DEVICE}...")
     try:
-        from chatterbox.tts_turbo import ChatterboxTurboTTS
-        tts_model = ChatterboxTurboTTS.from_pretrained(device=MODEL_DEVICE)
-        print("Chatterbox-Turbo loaded successfully.")
+        from chatterbox.tts import ChatterboxTTS
+        tts_model = ChatterboxTTS.from_pretrained(device=MODEL_DEVICE)
+        print("Chatterbox (Multilingual) loaded successfully.")
         try:
             with torch.inference_mode():
                 _ = tts_model.generate("System ready.")
@@ -65,7 +84,6 @@ async def lifespan(app: FastAPI):
     print(f"Loading Faster-Whisper (tiny) on {MODEL_DEVICE}...")
     try:
         from faster_whisper import WhisperModel
-        # Use 'tiny' or 'base' for speed. 'int8' is faster on CPU.
         stt_compute_type = "int8" if MODEL_DEVICE == "cpu" else "float16"
         stt_model = WhisperModel("tiny", device=MODEL_DEVICE, compute_type=stt_compute_type)
         print("Faster-Whisper loaded successfully.")
@@ -74,9 +92,8 @@ async def lifespan(app: FastAPI):
         stt_model = None
 
     yield
-    # Clean up (if needed)
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, title="Voice Service using Chatterbox")
 
 # Global STT model
 stt_model = None
@@ -96,8 +113,6 @@ def health_check():
     }
 
 import wave
-# ...
-
 import logging
 import traceback
 import sys
@@ -108,7 +123,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 tts_lock = threading.Lock()
 
-# ... (imports)
 
 async def _transcribe_internal(file: UploadFile, beam_size: int, max_words: int | None = None):
     """
@@ -130,7 +144,6 @@ async def _transcribe_internal(file: UploadFile, beam_size: int, max_words: int 
             audio_data = io.BytesIO(contents)
         else:
             logger.info("No WAV header detected. Treating as Raw PCM (16kHz, 16-bit, Mono).")
-            # Wrap in WAV container
             audio_data = io.BytesIO()
             try:
                 with wave.open(audio_data, 'wb') as wav_file:
@@ -165,44 +178,40 @@ async def transcribe(file: UploadFile = File(...)):
 
 @app.post("/transcribe/partial")
 async def transcribe_partial(file: UploadFile = File(...), max_words: int = Query(default=20, ge=3, le=60)):
-    # Fast/cheap configuration for in-progress transcript updates.
     return await _transcribe_internal(file=file, beam_size=1, max_words=max_words)
+
+
+def _synthesize_to_pcm16(text: str) -> bytes:
+    """Generate TTS audio and return raw PCM16 mono bytes at 24kHz."""
+    global tts_model
+    if not tts_model:
+        raise HTTPException(status_code=503, detail="TTS Model not loaded")
+
+    with tts_lock:
+        with torch.inference_mode():
+            wav = tts_model.generate(text)
+
+    if hasattr(wav, 'cpu'):
+        wav = wav.cpu()
+    if hasattr(wav, 'numpy'):
+        wav_numpy = wav.numpy()
+    else:
+        wav_numpy = np.array(wav)
+
+    wav_numpy = wav_numpy.squeeze()
+    wav_int16 = (np.clip(wav_numpy, -1, 1) * 32767).astype(np.int16)
+    return wav_int16.tobytes()
+
 
 @app.post("/synthesize/raw")
 def synthesize_raw(request: SpeakRequest):
-    global tts_model
-    if not tts_model:
-         raise HTTPException(status_code=503, detail="TTS Model not loaded")
-    
     try:
         logger.info(f"Synthesizing text: '{request.text}'")
-        # Serialize model generation to avoid concurrent contention on model resources.
-        with tts_lock:
-            with torch.inference_mode():
-                wav = tts_model.generate(request.text)
-        
-        # Ensure tensor is on CPU
-        if hasattr(wav, 'cpu'):
-            wav = wav.cpu()
-            
-        # Convert to numpy
-        if hasattr(wav, 'numpy'):
-             wav_numpy = wav.numpy()
-        else:
-             # Fallback if it's already numpy or list (MockTTS)
-             wav_numpy = np.array(wav)
-
-        # Squeeze to remove batch dim if present (1, N) -> (N,)
-        wav_numpy = wav_numpy.squeeze()
-        
-        # Normalize/Clip and Convert to Int16
-        # Chatterbox usually outputs float32 in [-1, 1]
-        wav_int16 = (np.clip(wav_numpy, -1, 1) * 32767).astype(np.int16)
-        
-        logger.info(f"Generated audio bytes: {len(wav_int16.tobytes())}")
+        audio_bytes = _synthesize_to_pcm16(request.text)
+        logger.info(f"Generated audio bytes: {len(audio_bytes)}")
         
         return Response(
-            content=wav_int16.tobytes(),
+            content=audio_bytes,
             media_type="application/octet-stream",
             headers={"X-Audio-Sample-Rate": "24000", "X-Audio-Format": "pcm16le-mono"},
         )
@@ -211,6 +220,40 @@ def synthesize_raw(request: SpeakRequest):
         logger.error(f"Synthesis error: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/synthesize/word")
+def synthesize_word(text: str = Query(..., min_length=1, max_length=100),
+                    lang: str = Query(default="en", min_length=2, max_length=5)):
+    """
+    Fast, cacheable word/phrase TTS endpoint for lessons.
+    Returns raw PCM16 mono audio at 24kHz.
+    """
+    key = _cache_key(text, lang)
+    cached = _cache_get(key)
+    if cached is not None:
+        return Response(
+            content=cached,
+            media_type="application/octet-stream",
+            headers={"X-Audio-Sample-Rate": "24000", "X-Audio-Format": "pcm16le-mono", "X-Cache": "HIT"},
+        )
+
+    try:
+        logger.info(f"Synthesizing word: '{text}' lang={lang}")
+        audio_bytes = _synthesize_to_pcm16(text)
+        _cache_put(key, audio_bytes)
+        logger.info(f"Word audio generated: {len(audio_bytes)} bytes")
+        
+        return Response(
+            content=audio_bytes,
+            media_type="application/octet-stream",
+            headers={"X-Audio-Sample-Rate": "24000", "X-Audio-Format": "pcm16le-mono", "X-Cache": "MISS"},
+        )
+    except Exception as e:
+        logger.error(f"Word synthesis error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

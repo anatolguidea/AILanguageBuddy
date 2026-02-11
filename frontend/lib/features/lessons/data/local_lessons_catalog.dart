@@ -1,1434 +1,934 @@
+import '../domain/entities/lesson.dart';
+import '../domain/entities/exercise.dart';
+
+/// Static catalog of lessons for all supported languages.
+/// Mixes ArrangeWords, Translate and MultipleChoice exercises.
+/// Status defaults to [LessonStatus.locked] — the repository
+/// overrides it based on persisted progress.
 class LocalLessonsCatalog {
   const LocalLessonsCatalog._();
 
-  static List<LocalLessonBlueprint> forLanguage(String languageCode) {
+  static List<Lesson> forLanguage(String languageCode) {
     final lessons = _catalog[languageCode];
     return lessons ?? _catalog['en']!;
   }
 
-  static final Map<String, List<LocalLessonBlueprint>> _catalog = {
+  // ─── Helpers ─────────────────────────────────────────────
+  static ArrangeWordsExercise _arrange({
+    required String id,
+    required String prompt,
+    String hint = '',
+    required List<String> words,
+    required List<String> solution,
+    String? foreignPhrase,
+  }) =>
+      ArrangeWordsExercise(
+        id: id, prompt: prompt, hint: hint,
+        words: words, solution: solution,
+        foreignPhrase: foreignPhrase,
+      );
+
+  static TranslateExercise _translate({
+    required String id,
+    required String prompt,
+    required String foreignPhrase,
+    required List<String> wordBank,
+    required List<String> solution,
+  }) =>
+      TranslateExercise(
+        id: id, prompt: prompt,
+        foreignPhrase: foreignPhrase,
+        wordBank: wordBank, solution: solution,
+      );
+
+  static MultipleChoiceExercise _choice({
+    required String id,
+    required String prompt,
+    required List<ChoiceOption> options,
+    required int correctIndex,
+  }) =>
+      MultipleChoiceExercise(
+        id: id, prompt: prompt,
+        options: options, correctOptionIndex: correctIndex,
+      );
+
+  // ─── Catalog ─────────────────────────────────────────────
+  static final Map<String, List<Lesson>> _catalog = {
+
+    // ═══════════════  SPANISH  ═══════════════
+    'es': [
+      Lesson(
+        id: 'es-1', title: 'Saludos', description: 'Basic greetings in Spanish.',
+        status: LessonStatus.locked, orderIndex: 1, languageCode: 'es',
+        exercises: [
+          _translate(
+            id: 'es-1-1',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Hola, ¿cómo estás?',
+            wordBank: ['are', 'Hello,', 'you', 'how', 'is', 'we'],
+            solution: ['Hello,', 'how', 'are', 'you'],
+          ),
+          _choice(
+            id: 'es-1-2',
+            prompt: 'Which one of these is "hello"?',
+            options: [
+              const ChoiceOption(label: 'hola', emoji: '👋'),
+              const ChoiceOption(label: 'adiós', emoji: '🚪'),
+              const ChoiceOption(label: 'gracias', emoji: '🙏'),
+            ],
+            correctIndex: 0,
+          ),
+          _arrange(
+            id: 'es-1-3',
+            prompt: 'Arrange: Buenos días a todos',
+            foreignPhrase: 'Buenos días a todos',
+            words: ['a', 'Buenos', 'todos', 'días'],
+            solution: ['Buenos', 'días', 'a', 'todos'],
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'es-2', title: 'Presentación', description: 'Introduce yourself.',
+        status: LessonStatus.locked, orderIndex: 2, languageCode: 'es',
+        exercises: [
+          _translate(
+            id: 'es-2-1',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Me llamo Ana',
+            wordBank: ['name', 'My', 'Ana', 'is', 'has', 'the'],
+            solution: ['My', 'name', 'is', 'Ana'],
+          ),
+          _choice(
+            id: 'es-2-2',
+            prompt: 'Which one of these is "name"?',
+            options: [
+              const ChoiceOption(label: 'casa', emoji: '🏠'),
+              const ChoiceOption(label: 'nombre', emoji: '📛'),
+              const ChoiceOption(label: 'perro', emoji: '🐕'),
+            ],
+            correctIndex: 1,
+          ),
+          _arrange(
+            id: 'es-2-3',
+            prompt: 'Arrange: Mucho gusto en conocerte',
+            foreignPhrase: 'Mucho gusto en conocerte',
+            words: ['conocerte', 'en', 'Mucho', 'gusto'],
+            solution: ['Mucho', 'gusto', 'en', 'conocerte'],
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'es-3', title: 'Comida y Bebida', description: 'Food and drink vocabulary.',
+        status: LessonStatus.locked, orderIndex: 3, languageCode: 'es',
+        exercises: [
+          _choice(
+            id: 'es-3-1',
+            prompt: 'Which one of these is "coffee"?',
+            options: [
+              const ChoiceOption(label: 'un café', emoji: '☕'),
+              const ChoiceOption(label: 'un croissant', emoji: '🥐'),
+              const ChoiceOption(label: 'un té', emoji: '🍵'),
+            ],
+            correctIndex: 0,
+          ),
+          _translate(
+            id: 'es-3-2',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Quiero un café, por favor',
+            wordBank: ['a', 'want', 'I', 'coffee', 'please', 'need', 'tea'],
+            solution: ['I', 'want', 'a', 'coffee', 'please'],
+          ),
+          _choice(
+            id: 'es-3-3',
+            prompt: 'Which one of these is "water"?',
+            options: [
+              const ChoiceOption(label: 'leche', emoji: '🥛'),
+              const ChoiceOption(label: 'agua', emoji: '💧'),
+              const ChoiceOption(label: 'jugo', emoji: '🧃'),
+              const ChoiceOption(label: 'vino', emoji: '🍷'),
+            ],
+            correctIndex: 1,
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'es-4', title: 'Rutina Diaria', description: 'Daily routine verbs.',
+        status: LessonStatus.locked, orderIndex: 4, languageCode: 'es',
+        exercises: [
+          _translate(
+            id: 'es-4-1',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Yo desayuno a las ocho',
+            wordBank: ['eat', 'at', 'breakfast', 'I', 'eight', 'lunch', 'noon'],
+            solution: ['I', 'eat', 'breakfast', 'at', 'eight'],
+          ),
+          _arrange(
+            id: 'es-4-2',
+            prompt: 'Arrange: Después del trabajo estudio español',
+            foreignPhrase: 'Después del trabajo estudio español',
+            words: ['estudio', 'Después', 'español', 'trabajo', 'del'],
+            solution: ['Después', 'del', 'trabajo', 'estudio', 'español'],
+          ),
+          _choice(
+            id: 'es-4-3',
+            prompt: 'Which one means "to sleep"?',
+            options: [
+              const ChoiceOption(label: 'comer', emoji: '🍽️'),
+              const ChoiceOption(label: 'dormir', emoji: '😴'),
+              const ChoiceOption(label: 'correr', emoji: '🏃'),
+            ],
+            correctIndex: 1,
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'es-5', title: 'Familia', description: 'Family members.',
+        status: LessonStatus.locked, orderIndex: 5, languageCode: 'es',
+        exercises: [
+          _choice(
+            id: 'es-5-1',
+            prompt: 'Which one of these is "mother"?',
+            options: [
+              const ChoiceOption(label: 'padre', emoji: '👨'),
+              const ChoiceOption(label: 'madre', emoji: '👩'),
+              const ChoiceOption(label: 'hermano', emoji: '👦'),
+              const ChoiceOption(label: 'hermana', emoji: '👧'),
+            ],
+            correctIndex: 1,
+          ),
+          _translate(
+            id: 'es-5-2',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Tengo dos hermanos',
+            wordBank: ['I', 'brothers', 'two', 'have', 'three', 'sisters'],
+            solution: ['I', 'have', 'two', 'brothers'],
+          ),
+          _arrange(
+            id: 'es-5-3',
+            prompt: 'Arrange: Mi familia es grande',
+            foreignPhrase: 'Mi familia es grande',
+            words: ['grande', 'familia', 'es', 'Mi'],
+            solution: ['Mi', 'familia', 'es', 'grande'],
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'es-6', title: 'Dar Opinión', description: 'Express your opinions.',
+        status: LessonStatus.locked, orderIndex: 6, languageCode: 'es',
+        exercises: [
+          _translate(
+            id: 'es-6-1',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Creo que esta ciudad es bonita',
+            wordBank: ['I', 'city', 'is', 'this', 'beautiful', 'think', 'ugly'],
+            solution: ['I', 'think', 'this', 'city', 'is', 'beautiful'],
+          ),
+          _arrange(
+            id: 'es-6-2',
+            prompt: 'Arrange: En mi opinión es mejor practicar',
+            foreignPhrase: 'En mi opinión es mejor practicar',
+            words: ['mejor', 'opinión', 'practicar', 'mi', 'En', 'es'],
+            solution: ['En', 'mi', 'opinión', 'es', 'mejor', 'practicar'],
+          ),
+        ],
+      ),
+    ],
+
+    // ═══════════════  FRENCH  ═══════════════
+    'fr': [
+      Lesson(
+        id: 'fr-1', title: 'Salutations', description: 'French greetings.',
+        status: LessonStatus.locked, orderIndex: 1, languageCode: 'fr',
+        exercises: [
+          _translate(
+            id: 'fr-1-1',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Bonjour, comment ça va?',
+            wordBank: ['Hello,', 'how', 'you', 'are', 'is', 'they'],
+            solution: ['Hello,', 'how', 'are', 'you'],
+          ),
+          _choice(
+            id: 'fr-1-2',
+            prompt: 'Which one of these is "goodbye"?',
+            options: [
+              const ChoiceOption(label: 'bonjour', emoji: '👋'),
+              const ChoiceOption(label: 'au revoir', emoji: '🚪'),
+              const ChoiceOption(label: 'merci', emoji: '🙏'),
+            ],
+            correctIndex: 1,
+          ),
+          _arrange(
+            id: 'fr-1-3',
+            prompt: 'Arrange: Bon matin à tous',
+            foreignPhrase: 'Bon matin à tous',
+            words: ['à', 'tous', 'Bon', 'matin'],
+            solution: ['Bon', 'matin', 'à', 'tous'],
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'fr-2', title: 'Se Présenter', description: 'Introduce yourself in French.',
+        status: LessonStatus.locked, orderIndex: 2, languageCode: 'fr',
+        exercises: [
+          _translate(
+            id: 'fr-2-1',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Je m\'appelle Ana',
+            wordBank: ['name', 'My', 'Ana', 'is', 'has', 'her'],
+            solution: ['My', 'name', 'is', 'Ana'],
+          ),
+          _choice(
+            id: 'fr-2-2',
+            prompt: 'Which one means "nice to meet you"?',
+            options: [
+              const ChoiceOption(label: 'enchanté', emoji: '🤝'),
+              const ChoiceOption(label: 'au revoir', emoji: '🚪'),
+              const ChoiceOption(label: 'comment', emoji: '❓'),
+            ],
+            correctIndex: 0,
+          ),
+          _arrange(
+            id: 'fr-2-3',
+            prompt: 'Arrange: Ravi de te rencontrer',
+            foreignPhrase: 'Ravi de te rencontrer',
+            words: ['te', 'de', 'rencontrer', 'Ravi'],
+            solution: ['Ravi', 'de', 'te', 'rencontrer'],
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'fr-3', title: 'Nourriture', description: 'Food and drink vocabulary.',
+        status: LessonStatus.locked, orderIndex: 3, languageCode: 'fr',
+        exercises: [
+          _choice(
+            id: 'fr-3-1',
+            prompt: 'Which one of these is "tea"?',
+            options: [
+              const ChoiceOption(label: 'un café', emoji: '☕'),
+              const ChoiceOption(label: 'un croissant', emoji: '🥐'),
+              const ChoiceOption(label: 'un thé', emoji: '🍵'),
+            ],
+            correctIndex: 2,
+          ),
+          _translate(
+            id: 'fr-3-2',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Je voudrais un café s\'il vous plaît',
+            wordBank: ['would', 'like', 'I', 'a', 'coffee', 'please', 'tea'],
+            solution: ['I', 'would', 'like', 'a', 'coffee', 'please'],
+          ),
+          _choice(
+            id: 'fr-3-3',
+            prompt: 'Which one of these is "bread"?',
+            options: [
+              const ChoiceOption(label: 'fromage', emoji: '🧀'),
+              const ChoiceOption(label: 'pain', emoji: '🍞'),
+              const ChoiceOption(label: 'lait', emoji: '🥛'),
+              const ChoiceOption(label: 'oeuf', emoji: '🥚'),
+            ],
+            correctIndex: 1,
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'fr-4', title: 'Routine Quotidienne', description: 'Daily routine.',
+        status: LessonStatus.locked, orderIndex: 4, languageCode: 'fr',
+        exercises: [
+          _translate(
+            id: 'fr-4-1',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Je me lève à sept heures',
+            wordBank: ['I', 'up', 'get', 'seven', 'at', 'eight', 'sleep'],
+            solution: ['I', 'get', 'up', 'at', 'seven'],
+          ),
+          _arrange(
+            id: 'fr-4-2',
+            prompt: 'Arrange: Après le travail j\'étudie',
+            foreignPhrase: 'Après le travail j\'étudie',
+            words: ['j\'étudie', 'travail', 'le', 'Après'],
+            solution: ['Après', 'le', 'travail', 'j\'étudie'],
+          ),
+          _choice(
+            id: 'fr-4-3',
+            prompt: 'Which one means "to eat"?',
+            options: [
+              const ChoiceOption(label: 'dormir', emoji: '😴'),
+              const ChoiceOption(label: 'manger', emoji: '🍽️'),
+              const ChoiceOption(label: 'courir', emoji: '🏃'),
+            ],
+            correctIndex: 1,
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'fr-5', title: 'La Famille', description: 'Family members.',
+        status: LessonStatus.locked, orderIndex: 5, languageCode: 'fr',
+        exercises: [
+          _choice(
+            id: 'fr-5-1',
+            prompt: 'Which one of these is "father"?',
+            options: [
+              const ChoiceOption(label: 'père', emoji: '👨'),
+              const ChoiceOption(label: 'mère', emoji: '👩'),
+              const ChoiceOption(label: 'frère', emoji: '👦'),
+              const ChoiceOption(label: 'soeur', emoji: '👧'),
+            ],
+            correctIndex: 0,
+          ),
+          _translate(
+            id: 'fr-5-2',
+            prompt: 'Write this in English',
+            foreignPhrase: 'J\'ai une grande famille',
+            wordBank: ['I', 'a', 'big', 'have', 'family', 'small', 'house'],
+            solution: ['I', 'have', 'a', 'big', 'family'],
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'fr-6', title: 'Donner Son Avis', description: 'Express opinions.',
+        status: LessonStatus.locked, orderIndex: 6, languageCode: 'fr',
+        exercises: [
+          _translate(
+            id: 'fr-6-1',
+            prompt: 'Write this in English',
+            foreignPhrase: 'À mon avis c\'est très bon',
+            wordBank: ['In', 'opinion', 'my', 'is', 'very', 'it', 'good', 'bad'],
+            solution: ['In', 'my', 'opinion', 'it', 'is', 'very', 'good'],
+          ),
+          _arrange(
+            id: 'fr-6-2',
+            prompt: 'Arrange: Je pense que c\'est facile',
+            foreignPhrase: 'Je pense que c\'est facile',
+            words: ['facile', 'pense', 'que', 'c\'est', 'Je'],
+            solution: ['Je', 'pense', 'que', 'c\'est', 'facile'],
+          ),
+        ],
+      ),
+    ],
+
+    // ═══════════════  GERMAN  ═══════════════
+    'de': [
+      Lesson(
+        id: 'de-1', title: 'Begrüßung', description: 'German greetings.',
+        status: LessonStatus.locked, orderIndex: 1, languageCode: 'de',
+        exercises: [
+          _translate(
+            id: 'de-1-1',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Hallo, wie geht es dir?',
+            wordBank: ['Hello,', 'how', 'are', 'you', 'is', 'we'],
+            solution: ['Hello,', 'how', 'are', 'you'],
+          ),
+          _choice(
+            id: 'de-1-2',
+            prompt: 'Which one of these is "good morning"?',
+            options: [
+              const ChoiceOption(label: 'Guten Morgen', emoji: '🌅'),
+              const ChoiceOption(label: 'Gute Nacht', emoji: '🌙'),
+              const ChoiceOption(label: 'Tschüss', emoji: '👋'),
+            ],
+            correctIndex: 0,
+          ),
+          _arrange(
+            id: 'de-1-3',
+            prompt: 'Arrange: Guten Morgen zusammen',
+            foreignPhrase: 'Guten Morgen zusammen',
+            words: ['Morgen', 'zusammen', 'Guten'],
+            solution: ['Guten', 'Morgen', 'zusammen'],
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'de-2', title: 'Sich Vorstellen', description: 'Introduce yourself.',
+        status: LessonStatus.locked, orderIndex: 2, languageCode: 'de',
+        exercises: [
+          _translate(
+            id: 'de-2-1',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Ich heiße Ana',
+            wordBank: ['name', 'My', 'Ana', 'is', 'has', 'their'],
+            solution: ['My', 'name', 'is', 'Ana'],
+          ),
+          _arrange(
+            id: 'de-2-2',
+            prompt: 'Arrange: Freut mich dich kennenzulernen',
+            foreignPhrase: 'Freut mich dich kennenzulernen',
+            words: ['dich', 'mich', 'Freut', 'kennenzulernen'],
+            solution: ['Freut', 'mich', 'dich', 'kennenzulernen'],
+          ),
+          _choice(
+            id: 'de-2-3',
+            prompt: 'Which one means "my name is"?',
+            options: [
+              const ChoiceOption(label: 'Ich heiße', emoji: '📛'),
+              const ChoiceOption(label: 'Ich habe', emoji: '🤲'),
+              const ChoiceOption(label: 'Ich bin', emoji: '👤'),
+            ],
+            correctIndex: 0,
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'de-3', title: 'Essen und Trinken', description: 'Food and drink.',
+        status: LessonStatus.locked, orderIndex: 3, languageCode: 'de',
+        exercises: [
+          _choice(
+            id: 'de-3-1',
+            prompt: 'Which one of these is "milk"?',
+            options: [
+              const ChoiceOption(label: 'Kaffee', emoji: '☕'),
+              const ChoiceOption(label: 'Milch', emoji: '🥛'),
+              const ChoiceOption(label: 'Wasser', emoji: '💧'),
+              const ChoiceOption(label: 'Bier', emoji: '🍺'),
+            ],
+            correctIndex: 1,
+          ),
+          _translate(
+            id: 'de-3-2',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Ich möchte einen Kaffee bitte',
+            wordBank: ['I', 'a', 'would', 'coffee', 'like', 'please', 'tea'],
+            solution: ['I', 'would', 'like', 'a', 'coffee', 'please'],
+          ),
+          _arrange(
+            id: 'de-3-3',
+            prompt: 'Arrange: Normalerweise trinke ich Kaffee',
+            foreignPhrase: 'Normalerweise trinke ich Kaffee',
+            words: ['ich', 'Normalerweise', 'Kaffee', 'trinke'],
+            solution: ['Normalerweise', 'trinke', 'ich', 'Kaffee'],
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'de-4', title: 'Tägliche Routine', description: 'Daily routine.',
+        status: LessonStatus.locked, orderIndex: 4, languageCode: 'de',
+        exercises: [
+          _translate(
+            id: 'de-4-1',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Ich stehe um sieben Uhr auf',
+            wordBank: ['I', 'up', 'get', 'seven', 'at', 'eight', 'go'],
+            solution: ['I', 'get', 'up', 'at', 'seven'],
+          ),
+          _choice(
+            id: 'de-4-2',
+            prompt: 'Which one means "to work"?',
+            options: [
+              const ChoiceOption(label: 'schlafen', emoji: '😴'),
+              const ChoiceOption(label: 'arbeiten', emoji: '💼'),
+              const ChoiceOption(label: 'lesen', emoji: '📖'),
+            ],
+            correctIndex: 1,
+          ),
+          _arrange(
+            id: 'de-4-3',
+            prompt: 'Arrange: Nach der Arbeit lerne ich Deutsch',
+            foreignPhrase: 'Nach der Arbeit lerne ich Deutsch',
+            words: ['der', 'ich', 'Arbeit', 'Deutsch', 'lerne', 'Nach'],
+            solution: ['Nach', 'der', 'Arbeit', 'lerne', 'ich', 'Deutsch'],
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'de-5', title: 'Familie', description: 'Family members.',
+        status: LessonStatus.locked, orderIndex: 5, languageCode: 'de',
+        exercises: [
+          _choice(
+            id: 'de-5-1',
+            prompt: 'Which one of these is "sister"?',
+            options: [
+              const ChoiceOption(label: 'Vater', emoji: '👨'),
+              const ChoiceOption(label: 'Mutter', emoji: '👩'),
+              const ChoiceOption(label: 'Bruder', emoji: '👦'),
+              const ChoiceOption(label: 'Schwester', emoji: '👧'),
+            ],
+            correctIndex: 3,
+          ),
+          _translate(
+            id: 'de-5-2',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Ich habe zwei Brüder',
+            wordBank: ['I', 'brothers', 'two', 'have', 'three', 'sisters'],
+            solution: ['I', 'have', 'two', 'brothers'],
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'de-6', title: 'Meinung Äußern', description: 'Express opinions.',
+        status: LessonStatus.locked, orderIndex: 6, languageCode: 'de',
+        exercises: [
+          _translate(
+            id: 'de-6-1',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Ich denke, das ist sehr gut',
+            wordBank: ['I', 'think', 'is', 'this', 'very', 'good', 'bad'],
+            solution: ['I', 'think', 'this', 'is', 'very', 'good'],
+          ),
+          _arrange(
+            id: 'de-6-2',
+            prompt: 'Arrange: Meiner Meinung nach ist es toll',
+            foreignPhrase: 'Meiner Meinung nach ist es toll',
+            words: ['nach', 'toll', 'Meinung', 'es', 'ist', 'Meiner'],
+            solution: ['Meiner', 'Meinung', 'nach', 'ist', 'es', 'toll'],
+          ),
+        ],
+      ),
+    ],
+
+    // ═══════════════  ITALIAN  ═══════════════
+    'it': [
+      Lesson(
+        id: 'it-1', title: 'Saluti', description: 'Italian greetings.',
+        status: LessonStatus.locked, orderIndex: 1, languageCode: 'it',
+        exercises: [
+          _translate(
+            id: 'it-1-1',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Ciao, come stai?',
+            wordBank: ['Hello,', 'how', 'you', 'are', 'is', 'they'],
+            solution: ['Hello,', 'how', 'are', 'you'],
+          ),
+          _choice(
+            id: 'it-1-2',
+            prompt: 'Which one of these is "thank you"?',
+            options: [
+              const ChoiceOption(label: 'ciao', emoji: '👋'),
+              const ChoiceOption(label: 'grazie', emoji: '🙏'),
+              const ChoiceOption(label: 'scusa', emoji: '😅'),
+            ],
+            correctIndex: 1,
+          ),
+          _arrange(
+            id: 'it-1-3',
+            prompt: 'Arrange: Buongiorno a tutti',
+            foreignPhrase: 'Buongiorno a tutti',
+            words: ['Buongiorno', 'tutti', 'a'],
+            solution: ['Buongiorno', 'a', 'tutti'],
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'it-2', title: 'Presentarsi', description: 'Introduce yourself.',
+        status: LessonStatus.locked, orderIndex: 2, languageCode: 'it',
+        exercises: [
+          _translate(
+            id: 'it-2-1',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Mi chiamo Ana',
+            wordBank: ['name', 'My', 'Ana', 'is', 'has', 'your'],
+            solution: ['My', 'name', 'is', 'Ana'],
+          ),
+          _arrange(
+            id: 'it-2-2',
+            prompt: 'Arrange: Piacere di conoscerti',
+            foreignPhrase: 'Piacere di conoscerti',
+            words: ['conoscerti', 'Piacere', 'di'],
+            solution: ['Piacere', 'di', 'conoscerti'],
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'it-3', title: 'Cibo e Bevande', description: 'Food and drink.',
+        status: LessonStatus.locked, orderIndex: 3, languageCode: 'it',
+        exercises: [
+          _choice(
+            id: 'it-3-1',
+            prompt: 'Which one of these is "coffee"?',
+            options: [
+              const ChoiceOption(label: 'un caffè', emoji: '☕'),
+              const ChoiceOption(label: 'un cornetto', emoji: '🥐'),
+              const ChoiceOption(label: 'un tè', emoji: '🍵'),
+            ],
+            correctIndex: 0,
+          ),
+          _translate(
+            id: 'it-3-2',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Vorrei un caffè per favore',
+            wordBank: ['would', 'like', 'I', 'a', 'coffee', 'please', 'tea'],
+            solution: ['I', 'would', 'like', 'a', 'coffee', 'please'],
+          ),
+          _arrange(
+            id: 'it-3-3',
+            prompt: 'Arrange: Di solito bevo caffè al mattino',
+            foreignPhrase: 'Di solito bevo caffè al mattino',
+            words: ['mattino', 'bevo', 'solito', 'al', 'caffè', 'Di'],
+            solution: ['Di', 'solito', 'bevo', 'caffè', 'al', 'mattino'],
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'it-4', title: 'Routine Quotidiana', description: 'Daily routine.',
+        status: LessonStatus.locked, orderIndex: 4, languageCode: 'it',
+        exercises: [
+          _translate(
+            id: 'it-4-1',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Mi sveglio alle sette',
+            wordBank: ['I', 'up', 'wake', 'seven', 'at', 'eight', 'sleep'],
+            solution: ['I', 'wake', 'up', 'at', 'seven'],
+          ),
+          _choice(
+            id: 'it-4-2',
+            prompt: 'Which one means "to study"?',
+            options: [
+              const ChoiceOption(label: 'dormire', emoji: '😴'),
+              const ChoiceOption(label: 'studiare', emoji: '📚'),
+              const ChoiceOption(label: 'mangiare', emoji: '🍽️'),
+            ],
+            correctIndex: 1,
+          ),
+        ],
+      ),
+      Lesson(
+        id: 'it-5', title: 'La Famiglia', description: 'Family members.',
+        status: LessonStatus.locked, orderIndex: 5, languageCode: 'it',
+        exercises: [
+          _choice(
+            id: 'it-5-1',
+            prompt: 'Which one of these is "brother"?',
+            options: [
+              const ChoiceOption(label: 'padre', emoji: '👨'),
+              const ChoiceOption(label: 'madre', emoji: '👩'),
+              const ChoiceOption(label: 'fratello', emoji: '👦'),
+              const ChoiceOption(label: 'sorella', emoji: '👧'),
+            ],
+            correctIndex: 2,
+          ),
+          _translate(
+            id: 'it-5-2',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Ho una sorella e un fratello',
+            wordBank: ['I', 'a', 'sister', 'have', 'and', 'brother', 'two'],
+            solution: ['I', 'have', 'a', 'sister', 'and', 'a', 'brother'],
+          ),
+        ],
+      ),
+    ],
+
+    // ═══════════════  ENGLISH (for non-native speakers) ═══════════════
     'en': [
-      LocalLessonBlueprint(
-        orderIndex: 1,
-        title: 'Greetings Basics',
-        description: 'Build your first short English phrases.',
-        sections: ['Start with direct and polite greetings.'],
+      Lesson(
+        id: 'en-1', title: 'Greetings', description: 'Basic English greetings.',
+        status: LessonStatus.locked, orderIndex: 1, languageCode: 'en',
         exercises: [
           _arrange(
             id: 'en-1-1',
             prompt: 'Arrange: Hello, how are you?',
-            hint: 'Simple friendly greeting',
-            wordBank: ['are', 'you', 'Hello,', 'how'],
+            words: ['are', 'you', 'Hello,', 'how'],
             solution: ['Hello,', 'how', 'are', 'you'],
           ),
-          _arrange(
+          _choice(
             id: 'en-1-2',
+            prompt: 'Which one means "goodbye"?',
+            options: [
+              const ChoiceOption(label: 'hello', emoji: '👋'),
+              const ChoiceOption(label: 'goodbye', emoji: '🚪'),
+              const ChoiceOption(label: 'thanks', emoji: '🙏'),
+            ],
+            correctIndex: 1,
+          ),
+          _arrange(
+            id: 'en-1-3',
             prompt: 'Arrange: Good morning everyone',
-            hint: 'Classroom-style greeting',
-            wordBank: ['morning', 'Good', 'everyone'],
+            words: ['morning', 'Good', 'everyone'],
             solution: ['Good', 'morning', 'everyone'],
           ),
         ],
       ),
-      LocalLessonBlueprint(
-        orderIndex: 2,
-        title: 'Introduce Yourself',
-        description: 'Combine name and origin in one sentence.',
-        sections: ['Use "I am" patterns to present yourself clearly.'],
+      Lesson(
+        id: 'en-2', title: 'Introduce Yourself', description: 'Say your name and origin.',
+        status: LessonStatus.locked, orderIndex: 2, languageCode: 'en',
         exercises: [
           _arrange(
             id: 'en-2-1',
             prompt: 'Arrange: I am Ana from Spain',
-            hint: 'Identity + origin',
-            wordBank: ['from', 'Ana', 'I', 'am', 'Spain'],
+            words: ['from', 'Ana', 'I', 'am', 'Spain'],
             solution: ['I', 'am', 'Ana', 'from', 'Spain'],
           ),
           _arrange(
             id: 'en-2-2',
             prompt: 'Arrange: Nice to meet you',
-            hint: 'Closing phrase',
-            wordBank: ['you', 'meet', 'Nice', 'to'],
+            words: ['you', 'meet', 'Nice', 'to'],
             solution: ['Nice', 'to', 'meet', 'you'],
           ),
         ],
       ),
-      LocalLessonBlueprint(
-        orderIndex: 3,
-        title: 'Daily Routine',
-        description: 'Make longer present-tense sentences.',
-        sections: ['Practice a complete routine with time context.'],
+      Lesson(
+        id: 'en-3', title: 'Daily Routine', description: 'Present-tense sentences.',
+        status: LessonStatus.locked, orderIndex: 3, languageCode: 'en',
         exercises: [
           _arrange(
             id: 'en-3-1',
             prompt: 'Arrange: I usually drink coffee in the morning',
-            hint: 'Habit sentence',
-            wordBank: [
-              'morning',
-              'usually',
-              'drink',
-              'coffee',
-              'the',
-              'I',
-              'in',
-            ],
-            solution: [
-              'I',
-              'usually',
-              'drink',
-              'coffee',
-              'in',
-              'the',
-              'morning',
-            ],
+            words: ['morning', 'usually', 'drink', 'coffee', 'the', 'I', 'in'],
+            solution: ['I', 'usually', 'drink', 'coffee', 'in', 'the', 'morning'],
           ),
-          _arrange(
+          _choice(
             id: 'en-3-2',
-            prompt: 'Arrange: After work I study English at home',
-            hint: 'Time connector + action',
-            wordBank: ['study', 'After', 'at', 'work', 'English', 'home', 'I'],
-            solution: ['After', 'work', 'I', 'study', 'English', 'at', 'home'],
+            prompt: 'Which one means "to eat"?',
+            options: [
+              const ChoiceOption(label: 'sleep', emoji: '😴'),
+              const ChoiceOption(label: 'eat', emoji: '🍽️'),
+              const ChoiceOption(label: 'run', emoji: '🏃'),
+            ],
+            correctIndex: 1,
           ),
         ],
       ),
-      LocalLessonBlueprint(
-        orderIndex: 4,
-        title: 'Express Opinion',
-        description: 'Move from facts to opinion with reason.',
-        sections: ['Use "because" to connect opinion and evidence.'],
+      Lesson(
+        id: 'en-4', title: 'Express Opinion', description: 'Share your views.',
+        status: LessonStatus.locked, orderIndex: 4, languageCode: 'en',
         exercises: [
           _arrange(
             id: 'en-4-1',
-            prompt: 'Arrange: I think this city is great because it is safe',
-            hint: 'Opinion + reason',
-            wordBank: [
-              'is',
-              'safe',
-              'city',
-              'because',
-              'is',
-              'this',
-              'I',
-              'think',
-              'great',
-              'it',
-            ],
-            solution: [
-              'I',
-              'think',
-              'this',
-              'city',
-              'is',
-              'great',
-              'because',
-              'it',
-              'is',
-              'safe',
-            ],
+            prompt: 'Arrange: I think this city is great',
+            words: ['is', 'city', 'I', 'think', 'great', 'this'],
+            solution: ['I', 'think', 'this', 'city', 'is', 'great'],
           ),
           _arrange(
             id: 'en-4-2',
-            prompt: 'Arrange: In my opinion learning daily is more effective',
-            hint: 'Formal viewpoint',
-            wordBank: [
-              'my',
-              'learning',
-              'effective',
-              'In',
-              'daily',
-              'is',
-              'more',
-              'opinion',
-            ],
-            solution: [
-              'In',
-              'my',
-              'opinion',
-              'learning',
-              'daily',
-              'is',
-              'more',
-              'effective',
-            ],
+            prompt: 'Arrange: In my opinion learning is fun',
+            words: ['my', 'learning', 'In', 'is', 'fun', 'opinion'],
+            solution: ['In', 'my', 'opinion', 'learning', 'is', 'fun'],
           ),
         ],
       ),
     ],
-    'es': [
-      LocalLessonBlueprint(
-        orderIndex: 1,
-        title: 'Saludos Basicos',
-        description: 'Frases cortas para saludar.',
-        sections: ['Empieza con saludos claros y naturales.'],
-        exercises: [
-          _arrange(
-            id: 'es-1-1',
-            prompt: 'Ordena: Hola, como estas?',
-            hint: 'Saludo cotidiano',
-            wordBank: ['estas?', 'como', 'Hola,'],
-            solution: ['Hola,', 'como', 'estas?'],
-          ),
-          _arrange(
-            id: 'es-1-2',
-            prompt: 'Ordena: Buenos dias a todos',
-            hint: 'Saludo grupal',
-            wordBank: ['a', 'Buenos', 'todos', 'dias'],
-            solution: ['Buenos', 'dias', 'a', 'todos'],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 2,
-        title: 'Presentacion Personal',
-        description: 'Habla de tu nombre y origen.',
-        sections: ['Usa "soy" para presentarte con confianza.'],
-        exercises: [
-          _arrange(
-            id: 'es-2-1',
-            prompt: 'Ordena: Soy Ana y soy de Espana',
-            hint: 'Nombre + pais',
-            wordBank: ['Ana', 'de', 'soy', 'y', 'Espana', 'Soy'],
-            solution: ['Soy', 'Ana', 'y', 'soy', 'de', 'Espana'],
-          ),
-          _arrange(
-            id: 'es-2-2',
-            prompt: 'Ordena: Mucho gusto en conocerte',
-            hint: 'Cierre de presentacion',
-            wordBank: ['conocerte', 'en', 'Mucho', 'gusto'],
-            solution: ['Mucho', 'gusto', 'en', 'conocerte'],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 3,
-        title: 'Rutina Diaria',
-        description: 'Construye frases mas largas de habitos.',
-        sections: ['Agrega marcadores de tiempo para precision.'],
-        exercises: [
-          _arrange(
-            id: 'es-3-1',
-            prompt: 'Ordena: Normalmente tomo cafe por la manana',
-            hint: 'Habito diario',
-            wordBank: ['la', 'Normalmente', 'por', 'tomo', 'manana', 'cafe'],
-            solution: ['Normalmente', 'tomo', 'cafe', 'por', 'la', 'manana'],
-          ),
-          _arrange(
-            id: 'es-3-2',
-            prompt: 'Ordena: Despues del trabajo estudio espanol en casa',
-            hint: 'Conector temporal',
-            wordBank: [
-              'estudio',
-              'Despues',
-              'espanol',
-              'casa',
-              'en',
-              'trabajo',
-              'del',
-            ],
-            solution: [
-              'Despues',
-              'del',
-              'trabajo',
-              'estudio',
-              'espanol',
-              'en',
-              'casa',
-            ],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 4,
-        title: 'Dar Opinion',
-        description: 'Une opinion con motivo.',
-        sections: ['Conecta ideas con "porque".'],
-        exercises: [
-          _arrange(
-            id: 'es-4-1',
-            prompt:
-                'Ordena: Creo que esta ciudad es excelente porque es segura',
-            hint: 'Opinion razonada',
-            wordBank: [
-              'es',
-              'ciudad',
-              'excelente',
-              'esta',
-              'porque',
-              'Creo',
-              'que',
-              'segura',
-              'es',
-            ],
-            solution: [
-              'Creo',
-              'que',
-              'esta',
-              'ciudad',
-              'es',
-              'excelente',
-              'porque',
-              'es',
-              'segura',
-            ],
-          ),
-          _arrange(
-            id: 'es-4-2',
-            prompt: 'Ordena: En mi opinion practicar diario es mas efectivo',
-            hint: 'Registro formal',
-            wordBank: [
-              'mas',
-              'opinion',
-              'efectivo',
-              'practicar',
-              'diario',
-              'mi',
-              'En',
-              'es',
-            ],
-            solution: [
-              'En',
-              'mi',
-              'opinion',
-              'practicar',
-              'diario',
-              'es',
-              'mas',
-              'efectivo',
-            ],
-          ),
-        ],
-      ),
-    ],
-    'fr': [
-      LocalLessonBlueprint(
-        orderIndex: 1,
-        title: 'Salutations',
-        description: 'Commence avec des phrases simples.',
-        sections: ['Utilise des salutations polies et directes.'],
-        exercises: [
-          _arrange(
-            id: 'fr-1-1',
-            prompt: 'Arrange: Bonjour, comment ca va?',
-            hint: 'Salutation standard',
-            wordBank: ['va?', 'comment', 'Bonjour,', 'ca'],
-            solution: ['Bonjour,', 'comment', 'ca', 'va?'],
-          ),
-          _arrange(
-            id: 'fr-1-2',
-            prompt: 'Arrange: Bon matin a tous',
-            hint: 'Salut collectif',
-            wordBank: ['a', 'tous', 'Bon', 'matin'],
-            solution: ['Bon', 'matin', 'a', 'tous'],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 2,
-        title: 'Se Presenter',
-        description: 'Donne ton nom et ton origine.',
-        sections: ['Structure de base: Je suis ...'],
-        exercises: [
-          _arrange(
-            id: 'fr-2-1',
-            prompt: 'Arrange: Je suis Ana et je viens d Espagne',
-            hint: 'Identite + origine',
-            wordBank: [
-              'd',
-              'viens',
-              'Ana',
-              'Espagne',
-              'Je',
-              'suis',
-              'et',
-              'je',
-            ],
-            solution: [
-              'Je',
-              'suis',
-              'Ana',
-              'et',
-              'je',
-              'viens',
-              'd',
-              'Espagne',
-            ],
-          ),
-          _arrange(
-            id: 'fr-2-2',
-            prompt: 'Arrange: Ravi de te rencontrer',
-            hint: 'Formule de politesse',
-            wordBank: ['te', 'de', 'rencontrer', 'Ravi'],
-            solution: ['Ravi', 'de', 'te', 'rencontrer'],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 3,
-        title: 'Routine Quotidienne',
-        description: 'Phrases plus longues au present.',
-        sections: ['Ajoute temps et action pour plus de detail.'],
-        exercises: [
-          _arrange(
-            id: 'fr-3-1',
-            prompt: 'Arrange: D habitude je bois du cafe le matin',
-            hint: 'Habitude quotidienne',
-            wordBank: [
-              'je',
-              'bois',
-              'matin',
-              'D',
-              'cafe',
-              'du',
-              'le',
-              'habitude',
-            ],
-            solution: [
-              'D',
-              'habitude',
-              'je',
-              'bois',
-              'du',
-              'cafe',
-              'le',
-              'matin',
-            ],
-          ),
-          _arrange(
-            id: 'fr-3-2',
-            prompt:
-                'Arrange: Apres le travail j etudie le francais a la maison',
-            hint: 'Temps + action',
-            wordBank: [
-              'la',
-              'j',
-              'travail',
-              'etudie',
-              'le',
-              'francais',
-              'Apres',
-              'a',
-              'maison',
-              'le',
-            ],
-            solution: [
-              'Apres',
-              'le',
-              'travail',
-              'j',
-              'etudie',
-              'le',
-              'francais',
-              'a',
-              'la',
-              'maison',
-            ],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 4,
-        title: 'Exprimer Une Opinion',
-        description: 'Relie idee et justification.',
-        sections: ['Utilise "parce que" pour argumenter.'],
-        exercises: [
-          _arrange(
-            id: 'fr-4-1',
-            prompt:
-                'Arrange: Je pense que cette ville est excellente parce que elle est sure',
-            hint: 'Opinion + cause',
-            wordBank: [
-              'parce',
-              'que',
-              'Je',
-              'ville',
-              'est',
-              'pense',
-              'elle',
-              'sure',
-              'cette',
-              'est',
-              'excellente',
-              'que',
-            ],
-            solution: [
-              'Je',
-              'pense',
-              'que',
-              'cette',
-              'ville',
-              'est',
-              'excellente',
-              'parce',
-              'que',
-              'elle',
-              'est',
-              'sure',
-            ],
-          ),
-          _arrange(
-            id: 'fr-4-2',
-            prompt:
-                'Arrange: A mon avis pratiquer chaque jour est plus efficace',
-            hint: 'Registre plus formel',
-            wordBank: [
-              'A',
-              'efficace',
-              'jour',
-              'pratiquer',
-              'chaque',
-              'plus',
-              'avis',
-              'est',
-              'mon',
-            ],
-            solution: [
-              'A',
-              'mon',
-              'avis',
-              'pratiquer',
-              'chaque',
-              'jour',
-              'est',
-              'plus',
-              'efficace',
-            ],
-          ),
-        ],
-      ),
-    ],
-    'de': [
-      LocalLessonBlueprint(
-        orderIndex: 1,
-        title: 'Grundlegende Begrussung',
-        description: 'Kurze freundliche Satze.',
-        sections: ['Starte mit einfachen Begrussungen.'],
-        exercises: [
-          _arrange(
-            id: 'de-1-1',
-            prompt: 'Ordne: Hallo, wie geht es dir?',
-            hint: 'Alltagsgruss',
-            wordBank: ['dir?', 'wie', 'Hallo,', 'geht', 'es'],
-            solution: ['Hallo,', 'wie', 'geht', 'es', 'dir?'],
-          ),
-          _arrange(
-            id: 'de-1-2',
-            prompt: 'Ordne: Guten Morgen zusammen',
-            hint: 'Gruppenbegrussung',
-            wordBank: ['Morgen', 'zusammen', 'Guten'],
-            solution: ['Guten', 'Morgen', 'zusammen'],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 2,
-        title: 'Sich Vorstellen',
-        description: 'Name und Herkunft nennen.',
-        sections: ['Nutze "Ich bin" fur klare Vorstellung.'],
-        exercises: [
-          _arrange(
-            id: 'de-2-1',
-            prompt: 'Ordne: Ich bin Ana und ich komme aus Spanien',
-            hint: 'Personliche Basis',
-            wordBank: [
-              'ich',
-              'aus',
-              'komme',
-              'und',
-              'Ich',
-              'Spanien',
-              'Ana',
-              'bin',
-            ],
-            solution: [
-              'Ich',
-              'bin',
-              'Ana',
-              'und',
-              'ich',
-              'komme',
-              'aus',
-              'Spanien',
-            ],
-          ),
-          _arrange(
-            id: 'de-2-2',
-            prompt: 'Ordne: Freut mich dich kennenzulernen',
-            hint: 'Hofliche Schlussformel',
-            wordBank: ['dich', 'mich', 'Freut', 'kennenzulernen'],
-            solution: ['Freut', 'mich', 'dich', 'kennenzulernen'],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 3,
-        title: 'Tagliche Routine',
-        description: 'Langere Satze mit Zeitangaben.',
-        sections: ['Baue Gewohnheiten in einem Satz.'],
-        exercises: [
-          _arrange(
-            id: 'de-3-1',
-            prompt: 'Ordne: Normalerweise trinke ich morgens Kaffee',
-            hint: 'Gewohnheit',
-            wordBank: ['ich', 'morgens', 'Normalerweise', 'Kaffee', 'trinke'],
-            solution: ['Normalerweise', 'trinke', 'ich', 'morgens', 'Kaffee'],
-          ),
-          _arrange(
-            id: 'de-3-2',
-            prompt: 'Ordne: Nach der Arbeit lerne ich zu Hause Deutsch',
-            hint: 'Zeit + Aktion',
-            wordBank: [
-              'der',
-              'ich',
-              'Arbeit',
-              'zu',
-              'Deutsch',
-              'Hause',
-              'lerne',
-              'Nach',
-            ],
-            solution: [
-              'Nach',
-              'der',
-              'Arbeit',
-              'lerne',
-              'ich',
-              'zu',
-              'Hause',
-              'Deutsch',
-            ],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 4,
-        title: 'Meinung Ausdrucken',
-        description: 'Aussage mit Begrundung verbinden.',
-        sections: ['Nutze "weil" um Grunde zu geben.'],
-        exercises: [
-          _arrange(
-            id: 'de-4-1',
-            prompt: 'Ordne: Ich denke diese Stadt ist toll weil sie sicher ist',
-            hint: 'Meinung + Grund',
-            wordBank: [
-              'sicher',
-              'ist',
-              'denke',
-              'weil',
-              'Ich',
-              'diese',
-              'sie',
-              'Stadt',
-              'toll',
-              'ist',
-            ],
-            solution: [
-              'Ich',
-              'denke',
-              'diese',
-              'Stadt',
-              'ist',
-              'toll',
-              'weil',
-              'sie',
-              'sicher',
-              'ist',
-            ],
-          ),
-          _arrange(
-            id: 'de-4-2',
-            prompt:
-                'Ordne: Meiner Meinung nach ist tagliches Lernen effektiver',
-            hint: 'Formale Meinung',
-            wordBank: [
-              'Lernen',
-              'tagliches',
-              'effektiver',
-              'Meiner',
-              'nach',
-              'ist',
-              'Meinung',
-            ],
-            solution: [
-              'Meiner',
-              'Meinung',
-              'nach',
-              'ist',
-              'tagliches',
-              'Lernen',
-              'effektiver',
-            ],
-          ),
-        ],
-      ),
-    ],
-    'it': [
-      LocalLessonBlueprint(
-        orderIndex: 1,
-        title: 'Saluti Base',
-        description: 'Prime frasi semplici.',
-        sections: ['Inizia con saluti chiari e naturali.'],
-        exercises: [
-          _arrange(
-            id: 'it-1-1',
-            prompt: 'Ordina: Ciao, come stai?',
-            hint: 'Saluto comune',
-            wordBank: ['come', 'stai?', 'Ciao,'],
-            solution: ['Ciao,', 'come', 'stai?'],
-          ),
-          _arrange(
-            id: 'it-1-2',
-            prompt: 'Ordina: Buongiorno a tutti',
-            hint: 'Saluto collettivo',
-            wordBank: ['Buongiorno', 'tutti', 'a'],
-            solution: ['Buongiorno', 'a', 'tutti'],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 2,
-        title: 'Presentarsi',
-        description: 'Nome e provenienza.',
-        sections: ['Usa "sono" per presentarti.'],
-        exercises: [
-          _arrange(
-            id: 'it-2-1',
-            prompt: 'Ordina: Sono Ana e vengo dalla Spagna',
-            hint: 'Identita personale',
-            wordBank: ['dalla', 'e', 'vengo', 'Sono', 'Spagna', 'Ana'],
-            solution: ['Sono', 'Ana', 'e', 'vengo', 'dalla', 'Spagna'],
-          ),
-          _arrange(
-            id: 'it-2-2',
-            prompt: 'Ordina: Piacere di conoscerti',
-            hint: 'Formula cortese',
-            wordBank: ['conoscerti', 'Piacere', 'di'],
-            solution: ['Piacere', 'di', 'conoscerti'],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 3,
-        title: 'Routine Quotidiana',
-        description: 'Frasi piu lunghe e naturali.',
-        sections: ['Aggiungi tempo e azione nella stessa frase.'],
-        exercises: [
-          _arrange(
-            id: 'it-3-1',
-            prompt: 'Ordina: Di solito bevo caffe al mattino',
-            hint: 'Abitudine',
-            wordBank: ['mattino', 'bevo', 'solito', 'al', 'caffe', 'Di'],
-            solution: ['Di', 'solito', 'bevo', 'caffe', 'al', 'mattino'],
-          ),
-          _arrange(
-            id: 'it-3-2',
-            prompt: 'Ordina: Dopo il lavoro studio italiano a casa',
-            hint: 'Connettore temporale',
-            wordBank: [
-              'studio',
-              'italiano',
-              'Dopo',
-              'a',
-              'lavoro',
-              'casa',
-              'il',
-            ],
-            solution: [
-              'Dopo',
-              'il',
-              'lavoro',
-              'studio',
-              'italiano',
-              'a',
-              'casa',
-            ],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 4,
-        title: 'Esprimere Opinioni',
-        description: 'Collega opinione e motivo.',
-        sections: ['Usa "perche" per argomentare.'],
-        exercises: [
-          _arrange(
-            id: 'it-4-1',
-            prompt: 'Ordina: Penso che questa citta sia ottima perche e sicura',
-            hint: 'Opinione con motivo',
-            wordBank: [
-              'sia',
-              'sicura',
-              'questa',
-              'citta',
-              'e',
-              'perche',
-              'ottima',
-              'Penso',
-              'che',
-            ],
-            solution: [
-              'Penso',
-              'che',
-              'questa',
-              'citta',
-              'sia',
-              'ottima',
-              'perche',
-              'e',
-              'sicura',
-            ],
-          ),
-          _arrange(
-            id: 'it-4-2',
-            prompt: 'Ordina: Secondo me praticare ogni giorno e piu efficace',
-            hint: 'Registro formale',
-            wordBank: [
-              'ogni',
-              'efficace',
-              'Secondo',
-              'me',
-              'giorno',
-              'e',
-              'praticare',
-              'piu',
-            ],
-            solution: [
-              'Secondo',
-              'me',
-              'praticare',
-              'ogni',
-              'giorno',
-              'e',
-              'piu',
-              'efficace',
-            ],
-          ),
-        ],
-      ),
-    ],
+
+    // ═══════════════  PORTUGUESE  ═══════════════
     'pt': [
-      LocalLessonBlueprint(
-        orderIndex: 1,
-        title: 'Saudacoes Basicas',
-        description: 'Frases iniciais curtas.',
-        sections: ['Comece com cumprimento simples e direto.'],
+      Lesson(
+        id: 'pt-1', title: 'Cumprimentos', description: 'Portuguese greetings.',
+        status: LessonStatus.locked, orderIndex: 1, languageCode: 'pt',
         exercises: [
-          _arrange(
+          _translate(
             id: 'pt-1-1',
-            prompt: 'Ordene: Ola, como voce esta?',
-            hint: 'Cumprimento diario',
-            wordBank: ['voce', 'esta?', 'como', 'Ola,'],
-            solution: ['Ola,', 'como', 'voce', 'esta?'],
+            prompt: 'Write this in English',
+            foreignPhrase: 'Olá, como você está?',
+            wordBank: ['Hello,', 'how', 'you', 'are', 'is', 'they'],
+            solution: ['Hello,', 'how', 'are', 'you'],
+          ),
+          _choice(
+            id: 'pt-1-2',
+            prompt: 'Which one means "thank you"?',
+            options: [
+              const ChoiceOption(label: 'olá', emoji: '👋'),
+              const ChoiceOption(label: 'obrigado', emoji: '🙏'),
+              const ChoiceOption(label: 'tchau', emoji: '🚪'),
+            ],
+            correctIndex: 1,
           ),
           _arrange(
-            id: 'pt-1-2',
-            prompt: 'Ordene: Bom dia a todos',
-            hint: 'Cumprimento em grupo',
-            wordBank: ['todos', 'a', 'dia', 'Bom'],
+            id: 'pt-1-3',
+            prompt: 'Arrange: Bom dia a todos',
+            foreignPhrase: 'Bom dia a todos',
+            words: ['a', 'Bom', 'todos', 'dia'],
             solution: ['Bom', 'dia', 'a', 'todos'],
           ),
         ],
       ),
-      LocalLessonBlueprint(
-        orderIndex: 2,
-        title: 'Apresentacao',
-        description: 'Nome e origem.',
-        sections: ['Use "eu sou" para se apresentar.'],
+      Lesson(
+        id: 'pt-2', title: 'Apresentação', description: 'Introduce yourself.',
+        status: LessonStatus.locked, orderIndex: 2, languageCode: 'pt',
         exercises: [
-          _arrange(
+          _translate(
             id: 'pt-2-1',
-            prompt: 'Ordene: Eu sou Ana e sou da Espanha',
-            hint: 'Dados pessoais basicos',
-            wordBank: ['da', 'sou', 'Eu', 'sou', 'Ana', 'Espanha', 'e'],
-            solution: ['Eu', 'sou', 'Ana', 'e', 'sou', 'da', 'Espanha'],
+            prompt: 'Write this in English',
+            foreignPhrase: 'Meu nome é Ana',
+            wordBank: ['name', 'My', 'Ana', 'is', 'has', 'your'],
+            solution: ['My', 'name', 'is', 'Ana'],
           ),
           _arrange(
             id: 'pt-2-2',
-            prompt: 'Ordene: Prazer em conhecer voce',
-            hint: 'Frase de cortesia',
-            wordBank: ['conhecer', 'Prazer', 'voce', 'em'],
-            solution: ['Prazer', 'em', 'conhecer', 'voce'],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 3,
-        title: 'Rotina Diaria',
-        description: 'Frases maiores sobre habitos.',
-        sections: ['Combine tempo e acao em uma frase.'],
-        exercises: [
-          _arrange(
-            id: 'pt-3-1',
-            prompt: 'Ordene: Normalmente eu tomo cafe de manha',
-            hint: 'Habito',
-            wordBank: ['eu', 'tomo', 'Normalmente', 'manha', 'cafe', 'de'],
-            solution: ['Normalmente', 'eu', 'tomo', 'cafe', 'de', 'manha'],
-          ),
-          _arrange(
-            id: 'pt-3-2',
-            prompt: 'Ordene: Depois do trabalho eu estudo portugues em casa',
-            hint: 'Conector temporal',
-            wordBank: [
-              'trabalho',
-              'eu',
-              'casa',
-              'estudo',
-              'do',
-              'portugues',
-              'em',
-              'Depois',
-            ],
-            solution: [
-              'Depois',
-              'do',
-              'trabalho',
-              'eu',
-              'estudo',
-              'portugues',
-              'em',
-              'casa',
-            ],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 4,
-        title: 'Expressar Opiniao',
-        description: 'Opiniao com justificativa.',
-        sections: ['Use "porque" para explicar sua ideia.'],
-        exercises: [
-          _arrange(
-            id: 'pt-4-1',
-            prompt: 'Ordene: Eu acho que esta cidade e otima porque e segura',
-            hint: 'Opiniao + motivo',
-            wordBank: [
-              'cidade',
-              'porque',
-              'acho',
-              'Eu',
-              'e',
-              'otima',
-              'segura',
-              'que',
-              'esta',
-              'e',
-            ],
-            solution: [
-              'Eu',
-              'acho',
-              'que',
-              'esta',
-              'cidade',
-              'e',
-              'otima',
-              'porque',
-              'e',
-              'segura',
-            ],
-          ),
-          _arrange(
-            id: 'pt-4-2',
-            prompt: 'Ordene: Na minha opiniao praticar todo dia e mais eficaz',
-            hint: 'Forma formal',
-            wordBank: [
-              'mais',
-              'praticar',
-              'eficaz',
-              'todo',
-              'dia',
-              'Na',
-              'minha',
-              'opiniao',
-              'e',
-            ],
-            solution: [
-              'Na',
-              'minha',
-              'opiniao',
-              'praticar',
-              'todo',
-              'dia',
-              'e',
-              'mais',
-              'eficaz',
-            ],
+            prompt: 'Arrange: Prazer em te conhecer',
+            foreignPhrase: 'Prazer em te conhecer',
+            words: ['conhecer', 'em', 'Prazer', 'te'],
+            solution: ['Prazer', 'em', 'te', 'conhecer'],
           ),
         ],
       ),
     ],
-    'ru': [
-      LocalLessonBlueprint(
-        orderIndex: 1,
-        title: 'Privetstviya',
-        description: 'Prostye privetstviya i nachalo dialoga.',
-        sections: ['Nachni s korotkih i ponyatnyh fraz.'],
-        exercises: [
-          _arrange(
-            id: 'ru-1-1',
-            prompt: 'Rasstavi: Privet, kak dela?',
-            hint: 'Povsednevnoe privetstvie',
-            wordBank: ['Privet,', 'dela?', 'kak'],
-            solution: ['Privet,', 'kak', 'dela?'],
-          ),
-          _arrange(
-            id: 'ru-1-2',
-            prompt: 'Rasstavi: Dobroe utro vsem',
-            hint: 'Privetstvie gruppe',
-            wordBank: ['utro', 'vsem', 'Dobroe'],
-            solution: ['Dobroe', 'utro', 'vsem'],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 2,
-        title: 'Predstavlenie',
-        description: 'Skazhi imya i stranu.',
-        sections: ['Ispolzuy konstrukciyu "Ya ...".'],
-        exercises: [
-          _arrange(
-            id: 'ru-2-1',
-            prompt: 'Rasstavi: Ya Ana i ya iz Ispanii',
-            hint: 'Imya i proishozhdenie',
-            wordBank: ['Ya', 'Ana', 'ya', 'iz', 'i', 'Ispanii'],
-            solution: ['Ya', 'Ana', 'i', 'ya', 'iz', 'Ispanii'],
-          ),
-          _arrange(
-            id: 'ru-2-2',
-            prompt: 'Rasstavi: Rada poznakomitsya s toboi',
-            hint: 'Vezhlivaya fraza',
-            wordBank: ['Rada', 's', 'poznakomitsya', 'toboi'],
-            solution: ['Rada', 'poznakomitsya', 's', 'toboi'],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 3,
-        title: 'Dnevnaya Rutina',
-        description: 'Dlinnye frazy o privychkah.',
-        sections: ['Dobavlyai vremya i deistvie.'],
-        exercises: [
-          _arrange(
-            id: 'ru-3-1',
-            prompt: 'Rasstavi: Obychno ya pyu kofe utrom',
-            hint: 'Privychka',
-            wordBank: ['utrom', 'ya', 'kofe', 'Obychno', 'pyu'],
-            solution: ['Obychno', 'ya', 'pyu', 'kofe', 'utrom'],
-          ),
-          _arrange(
-            id: 'ru-3-2',
-            prompt: 'Rasstavi: Posle raboty ya uchu russkiy doma',
-            hint: 'Vremennaya svyazka',
-            wordBank: ['doma', 'ya', 'russkiy', 'Posle', 'raboty', 'uchu'],
-            solution: ['Posle', 'raboty', 'ya', 'uchu', 'russkiy', 'doma'],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 4,
-        title: 'Vyrazhat Mnenie',
-        description: 'Mnenie plus prichina.',
-        sections: ['Ispolzuy "potomu chto" dlya argumenta.'],
-        exercises: [
-          _arrange(
-            id: 'ru-4-1',
-            prompt:
-                'Rasstavi: Ya dumayu chto etot gorod otlichnyi potomu chto on bezopasnyi',
-            hint: 'Mnenie s obosnovaniem',
-            wordBank: [
-              'on',
-              'bezopasnyi',
-              'potomu',
-              'otlichnyi',
-              'dumayu',
-              'Ya',
-              'gorod',
-              'chto',
-              'chto',
-              'etot',
-            ],
-            solution: [
-              'Ya',
-              'dumayu',
-              'chto',
-              'etot',
-              'gorod',
-              'otlichnyi',
-              'potomu',
-              'chto',
-              'on',
-              'bezopasnyi',
-            ],
-          ),
-          _arrange(
-            id: 'ru-4-2',
-            prompt:
-                'Rasstavi: Po moemu mneniyu ezhednevnaya praktika effektivnee',
-            hint: 'Formalnoe mnenie',
-            wordBank: [
-              'ezhednevnaya',
-              'Po',
-              'mneniyu',
-              'moemu',
-              'effektivnee',
-              'praktika',
-            ],
-            solution: [
-              'Po',
-              'moemu',
-              'mneniyu',
-              'ezhednevnaya',
-              'praktika',
-              'effektivnee',
-            ],
-          ),
-        ],
-      ),
-    ],
+
+    // ═══════════════  JAPANESE  ═══════════════
     'ja': [
-      LocalLessonBlueprint(
-        orderIndex: 1,
-        title: 'Aisatsu Basics',
-        description: 'Simple greeting patterns in Japanese (romaji).',
-        sections: ['Keep the rhythm short and polite.'],
+      Lesson(
+        id: 'ja-1', title: 'あいさつ', description: 'Japanese greetings.',
+        status: LessonStatus.locked, orderIndex: 1, languageCode: 'ja',
         exercises: [
-          _arrange(
+          _translate(
             id: 'ja-1-1',
-            prompt: 'Arrange: Konnichiwa, ogenki desu ka?',
-            hint: 'Everyday greeting',
-            wordBank: ['desu', 'Konnichiwa,', 'ogenki', 'ka?'],
-            solution: ['Konnichiwa,', 'ogenki', 'desu', 'ka?'],
+            prompt: 'Write this in English',
+            foreignPhrase: 'こんにちは、お元気ですか？',
+            wordBank: ['Hello,', 'how', 'you', 'are', 'is', 'we'],
+            solution: ['Hello,', 'how', 'are', 'you'],
           ),
-          _arrange(
+          _choice(
             id: 'ja-1-2',
-            prompt: 'Arrange: Ohayo gozaimasu minasan',
-            hint: 'Morning group greeting',
-            wordBank: ['minasan', 'Ohayo', 'gozaimasu'],
-            solution: ['Ohayo', 'gozaimasu', 'minasan'],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 2,
-        title: 'Jiko Shokai',
-        description: 'Introduce yourself with name and country.',
-        sections: ['Use watashi wa ... desu structure.'],
-        exercises: [
-          _arrange(
-            id: 'ja-2-1',
-            prompt: 'Arrange: Watashi wa Ana desu Supein kara kimashita',
-            hint: 'Identity + origin',
-            wordBank: [
-              'desu',
-              'kara',
-              'Supein',
-              'Watashi',
-              'Ana',
-              'wa',
-              'kimashita',
+            prompt: 'Which one means "good morning"?',
+            options: [
+              const ChoiceOption(label: 'おはよう', emoji: '🌅'),
+              const ChoiceOption(label: 'さようなら', emoji: '🚪'),
+              const ChoiceOption(label: 'ありがとう', emoji: '🙏'),
             ],
-            solution: [
-              'Watashi',
-              'wa',
-              'Ana',
-              'desu',
-              'Supein',
-              'kara',
-              'kimashita',
-            ],
-          ),
-          _arrange(
-            id: 'ja-2-2',
-            prompt: 'Arrange: Dozo yoroshiku onegaishimasu',
-            hint: 'Polite closing phrase',
-            wordBank: ['onegaishimasu', 'Dozo', 'yoroshiku'],
-            solution: ['Dozo', 'yoroshiku', 'onegaishimasu'],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 3,
-        title: 'Nichijo Routine',
-        description: 'Create longer everyday routine sentences.',
-        sections: ['Add time markers like asa and shigoto no ato.'],
-        exercises: [
-          _arrange(
-            id: 'ja-3-1',
-            prompt: 'Arrange: Watashi wa asa koohii o nomimasu',
-            hint: 'Daily habit',
-            wordBank: ['nomimasu', 'koohii', 'o', 'Watashi', 'wa', 'asa'],
-            solution: ['Watashi', 'wa', 'asa', 'koohii', 'o', 'nomimasu'],
-          ),
-          _arrange(
-            id: 'ja-3-2',
-            prompt: 'Arrange: Shigoto no ato ie de nihongo o benkyou shimasu',
-            hint: 'After-work routine',
-            wordBank: [
-              'nihongo',
-              'ie',
-              'o',
-              'ato',
-              'de',
-              'Shigoto',
-              'benkyou',
-              'shimasu',
-              'no',
-            ],
-            solution: [
-              'Shigoto',
-              'no',
-              'ato',
-              'ie',
-              'de',
-              'nihongo',
-              'o',
-              'benkyou',
-              'shimasu',
-            ],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 4,
-        title: 'Ikken To Riyu',
-        description: 'Express opinion and reason in one flow.',
-        sections: ['Use ... to omoimasu, naze nara ... pattern.'],
-        exercises: [
-          _arrange(
-            id: 'ja-4-1',
-            prompt:
-                'Arrange: Kono machi wa anzen da to omoimasu naze nara benri desu',
-            hint: 'Opinion + reason',
-            wordBank: [
-              'desu',
-              'naze',
-              'wa',
-              'anzen',
-              'to',
-              'benri',
-              'machi',
-              'nara',
-              'Kono',
-              'da',
-              'omoimasu',
-            ],
-            solution: [
-              'Kono',
-              'machi',
-              'wa',
-              'anzen',
-              'da',
-              'to',
-              'omoimasu',
-              'naze',
-              'nara',
-              'benri',
-              'desu',
-            ],
-          ),
-          _arrange(
-            id: 'ja-4-2',
-            prompt:
-                'Arrange: Watashi no iken dewa mainichi renshuu no hou ga koukateki desu',
-            hint: 'Formal viewpoint',
-            wordBank: [
-              'dewa',
-              'no',
-              'ga',
-              'renshuu',
-              'hou',
-              'koukateki',
-              'Watashi',
-              'desu',
-              'iken',
-              'mainichi',
-            ],
-            solution: [
-              'Watashi',
-              'no',
-              'iken',
-              'dewa',
-              'mainichi',
-              'renshuu',
-              'no',
-              'hou',
-              'ga',
-              'koukateki',
-              'desu',
-            ],
+            correctIndex: 0,
           ),
         ],
       ),
     ],
+
+    // ═══════════════  CHINESE  ═══════════════
     'zh': [
-      LocalLessonBlueprint(
-        orderIndex: 1,
-        title: 'Greeting Starter',
-        description: 'Basic Mandarin greetings in pinyin.',
-        sections: ['Keep tone patterns short first.'],
+      Lesson(
+        id: 'zh-1', title: '问候', description: 'Chinese greetings.',
+        status: LessonStatus.locked, orderIndex: 1, languageCode: 'zh',
         exercises: [
-          _arrange(
+          _translate(
             id: 'zh-1-1',
-            prompt: 'Arrange: Ni hao, ni zenme yang?',
-            hint: 'Daily greeting',
-            wordBank: ['ni', 'zenme', 'hao,', 'yang?', 'Ni'],
-            solution: ['Ni', 'hao,', 'ni', 'zenme', 'yang?'],
+            prompt: 'Write this in English',
+            foreignPhrase: '你好，你好吗？',
+            wordBank: ['Hello,', 'how', 'you', 'are', 'is', 'we'],
+            solution: ['Hello,', 'how', 'are', 'you'],
           ),
-          _arrange(
+          _choice(
             id: 'zh-1-2',
-            prompt: 'Arrange: Zao shang hao dajia',
-            hint: 'Group morning greeting',
-            wordBank: ['hao', 'dajia', 'Zao', 'shang'],
-            solution: ['Zao', 'shang', 'hao', 'dajia'],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 2,
-        title: 'Self Intro',
-        description: 'Name + country introduction.',
-        sections: ['Use Wo shi ... from start.'],
-        exercises: [
-          _arrange(
-            id: 'zh-2-1',
-            prompt: 'Arrange: Wo shi Ana wo lai zi Xibanya',
-            hint: 'Identity phrase',
-            wordBank: ['Ana', 'shi', 'wo', 'zi', 'lai', 'Xibanya', 'Wo'],
-            solution: ['Wo', 'shi', 'Ana', 'wo', 'lai', 'zi', 'Xibanya'],
-          ),
-          _arrange(
-            id: 'zh-2-2',
-            prompt: 'Arrange: Hen gaoxing renshi ni',
-            hint: 'Polite close',
-            wordBank: ['Hen', 'renshi', 'gaoxing', 'ni'],
-            solution: ['Hen', 'gaoxing', 'renshi', 'ni'],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 3,
-        title: 'Daily Actions',
-        description: 'Build longer routine statements.',
-        sections: ['Add time words like zao shang and xia ban hou.'],
-        exercises: [
-          _arrange(
-            id: 'zh-3-1',
-            prompt: 'Arrange: Wo zao shang changchang he kafei',
-            hint: 'Habit sentence',
-            wordBank: ['kafei', 'he', 'shang', 'changchang', 'Wo', 'zao'],
-            solution: ['Wo', 'zao', 'shang', 'changchang', 'he', 'kafei'],
-          ),
-          _arrange(
-            id: 'zh-3-2',
-            prompt: 'Arrange: Xia ban hou wo zai jia xue yingyu',
-            hint: 'After-work action',
-            wordBank: [
-              'zai',
-              'yingyu',
-              'jia',
-              'hou',
-              'Xia',
-              'xue',
-              'wo',
-              'ban',
+            prompt: 'Which one means "thank you"?',
+            options: [
+              const ChoiceOption(label: '你好', emoji: '👋'),
+              const ChoiceOption(label: '谢谢', emoji: '🙏'),
+              const ChoiceOption(label: '再见', emoji: '🚪'),
             ],
-            solution: [
-              'Xia',
-              'ban',
-              'hou',
-              'wo',
-              'zai',
-              'jia',
-              'xue',
-              'yingyu',
-            ],
-          ),
-        ],
-      ),
-      LocalLessonBlueprint(
-        orderIndex: 4,
-        title: 'Opinion Building',
-        description: 'Express views with reason.',
-        sections: ['Use yinwei to connect reason.'],
-        exercises: [
-          _arrange(
-            id: 'zh-4-1',
-            prompt:
-                'Arrange: Wo juede zhe ge chengshi hen hao yinwei hen anquan',
-            hint: 'Opinion + reason',
-            wordBank: [
-              'hen',
-              'anquan',
-              'chengshi',
-              'zhe',
-              'hao',
-              'juede',
-              'Wo',
-              'yinwei',
-              'ge',
-              'hen',
-            ],
-            solution: [
-              'Wo',
-              'juede',
-              'zhe',
-              'ge',
-              'chengshi',
-              'hen',
-              'hao',
-              'yinwei',
-              'hen',
-              'anquan',
-            ],
-          ),
-          _arrange(
-            id: 'zh-4-2',
-            prompt: 'Arrange: Wo renwei meitian lianxi geng youxiao',
-            hint: 'Formal opinion',
-            wordBank: ['Wo', 'lianxi', 'geng', 'renwei', 'youxiao', 'meitian'],
-            solution: ['Wo', 'renwei', 'meitian', 'lianxi', 'geng', 'youxiao'],
+            correctIndex: 1,
           ),
         ],
       ),
     ],
-  };
-}
 
-class LocalLessonBlueprint {
-  final int orderIndex;
-  final String title;
-  final String description;
-  final List<String> sections;
-  final List<Map<String, dynamic>> exercises;
-
-  const LocalLessonBlueprint({
-    required this.orderIndex,
-    required this.title,
-    required this.description,
-    required this.sections,
-    required this.exercises,
-  });
-
-  Map<String, dynamic> toContentMap() {
-    return {
-      'sections': sections
-          .map((section) => {'type': 'text', 'content': section})
-          .toList(growable: false),
-      'exercises': exercises,
-    };
-  }
-}
-
-Map<String, dynamic> _arrange({
-  required String id,
-  required String prompt,
-  required String hint,
-  required List<String> wordBank,
-  required List<String> solution,
-}) {
-  return {
-    'id': id,
-    'type': 'arrange_words',
-    'prompt': prompt,
-    'hint': hint,
-    'wordBank': wordBank,
-    'solution': solution,
+    // ═══════════════  RUSSIAN  ═══════════════
+    'ru': [
+      Lesson(
+        id: 'ru-1', title: 'Приветствия', description: 'Russian greetings.',
+        status: LessonStatus.locked, orderIndex: 1, languageCode: 'ru',
+        exercises: [
+          _translate(
+            id: 'ru-1-1',
+            prompt: 'Write this in English',
+            foreignPhrase: 'Привет, как дела?',
+            wordBank: ['Hello,', 'how', 'you', 'are', 'is', 'they'],
+            solution: ['Hello,', 'how', 'are', 'you'],
+          ),
+          _choice(
+            id: 'ru-1-2',
+            prompt: 'Which one means "thank you"?',
+            options: [
+              const ChoiceOption(label: 'привет', emoji: '👋'),
+              const ChoiceOption(label: 'спасибо', emoji: '🙏'),
+              const ChoiceOption(label: 'пока', emoji: '🚪'),
+            ],
+            correctIndex: 1,
+          ),
+        ],
+      ),
+    ],
   };
 }

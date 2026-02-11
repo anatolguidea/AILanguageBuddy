@@ -22,6 +22,12 @@ class AppColors {
   static const Color avatarListening = Color(0xFFF472B6);
   static const Color avatarSpeaking = Color(0xFF6D28D9);
 
+  // Duolingo-style Lesson Colors
+  static const Color correctGreen = Color(0xFF58CC02);
+  static const Color incorrectRed = Color(0xFFFF4B4B);
+  static const Color streakGold = Color(0xFFFFC800);
+  static const Color newWordPurple = Color(0xFFCE82FF);
+
   // Text
   static const Color textPrimary = Color(0xFFFFFFFF);
   static const Color textSecondary = Color(0xFFA1A1AA); // Zinc 400

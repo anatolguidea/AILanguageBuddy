@@ -4,7 +4,7 @@ import '../../../../theme/app_colors.dart';
 import '../../domain/entities/lesson.dart';
 import '../widgets/lesson_node.dart';
 import '../providers/lessons_provider.dart';
-import 'lesson_detail_page.dart';
+import 'lesson_session_page.dart';
 
 class LessonsPage extends ConsumerWidget {
   const LessonsPage({super.key});
@@ -37,7 +37,7 @@ class LessonsPage extends ConsumerWidget {
                        return;
                     }
                     Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => LessonDetailPage(lesson: lesson)),
+                      MaterialPageRoute(builder: (_) => LessonSessionPage(lesson: lesson)),
                     );
                   },
                 );

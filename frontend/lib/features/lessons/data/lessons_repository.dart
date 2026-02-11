@@ -1,102 +1,66 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../../core/config.dart';
 import '../domain/entities/lesson.dart';
 import 'local_lessons_catalog.dart';
+import 'datasources/local_lesson_datasource.dart';
 
-final lessonsRepositoryProvider = Provider((ref) => LessonsRepository());
+
+final lessonsRepositoryProvider = Provider((ref) {
+  final localDataSource = ref.watch(localLessonDataSourceProvider);
+  return LessonsRepository(localDataSource);
+});
 
 class LessonsRepository {
-  final Map<String, Set<int>> _localCompletedByLanguage = {};
+  final LocalLessonDataSource _localDataSource;
+
+  LessonsRepository(this._localDataSource);
 
   Future<List<Lesson>> getLessons(String languageCode) async {
-    final localBlueprints = LocalLessonsCatalog.forLanguage(languageCode);
-    if (localBlueprints.isEmpty) return const [];
+    // 1. Get static content
+    final bluePrints = LocalLessonsCatalog.forLanguage(languageCode);
+    if (bluePrints.isEmpty) return [];
 
-    final remoteByOrder = <int, Lesson>{};
-    final token = Supabase.instance.client.auth.currentSession?.accessToken;
-    if (token != null) {
-      final url = Uri.parse(
-        '$defaultBackendBaseUrl/api/v1/lessons?language=$languageCode',
-      );
-      try {
-        final response = await http.get(
-          url,
-          headers: {'Authorization': 'Bearer $token'},
-        );
+    // 2. Get user progress from SQLite
+    // Returns List<LessonProgressTableData>
+    final progressList = await _localDataSource.getProgressForLanguage(languageCode);
+    final completedIds = progressList
+        .where((p) => p.isCompleted)
+        .map((p) => p.id)
+        .toSet();
 
-        if (response.statusCode == 200) {
-          final List<dynamic> data = jsonDecode(response.body);
-          for (final json in data.whereType<Map<String, dynamic>>()) {
-            final lesson = Lesson.fromJson(json, languageCode: languageCode);
-            remoteByOrder[lesson.orderIndex] = lesson;
-          }
-        }
-      } catch (_) {
-        // If backend lessons are unavailable, fall back to local curriculum.
-      }
-    }
-
-    final completedLocal = _localCompletedByLanguage.putIfAbsent(
-      languageCode,
-      () => <int>{},
-    );
+    // 3. Merge and determine status
     final merged = <Lesson>[];
-    var previousCompleted = true;
+    var isPreviousCompleted = true; // First lesson is always unlocked if previous (null) is "completed"
 
-    for (final blueprint in localBlueprints) {
-      final remote = remoteByOrder[blueprint.orderIndex];
-      final isRemoteCompleted = remote?.status == LessonStatus.completed;
-      final isLocalCompleted = completedLocal.contains(blueprint.orderIndex);
-      final isCompleted = isRemoteCompleted || isLocalCompleted;
-
+    for (final lesson in bluePrints) {
+      final isCompleted = completedIds.contains(lesson.id);
+      
       LessonStatus status;
       if (isCompleted) {
         status = LessonStatus.completed;
-      } else if (previousCompleted) {
+      } else if (isPreviousCompleted) {
         status = LessonStatus.available;
       } else {
         status = LessonStatus.locked;
       }
 
-      merged.add(
-        Lesson(
-          id: remote?.id ?? 'local-$languageCode-${blueprint.orderIndex}',
-          title: blueprint.title,
-          description: blueprint.description,
-          status: status,
-          orderIndex: blueprint.orderIndex,
-          languageCode: languageCode,
-          content: blueprint.toContentMap(),
-        ),
-      );
-
-      previousCompleted = isCompleted;
+      merged.add(lesson.copyWith(status: status));
+      
+      // Update for next iteration
+      isPreviousCompleted = isCompleted;
     }
 
     return merged;
   }
 
-  Future<void> completeLesson({
-    required String lessonId,
-    required String languageCode,
-    required int orderIndex,
-  }) async {
-    if (lessonId.startsWith('local-')) {
-      _localCompletedByLanguage
-          .putIfAbsent(languageCode, () => <int>{})
-          .add(orderIndex);
-      return;
-    }
-
-    final token = Supabase.instance.client.auth.currentSession?.accessToken;
-    if (token == null) return;
-
-    final url = Uri.parse(
-      '$defaultBackendBaseUrl/api/v1/lessons/$lessonId/complete',
+  Future<void> completeLesson(Lesson lesson) async {
+    // Save to local DB
+    await _localDataSource.saveLessonProgress(
+      lesson.id,
+      lesson.languageCode,
+      true, // isCompleted
+      3,    // Stars (hardcoded for now, can be dynamic later)
     );
-    await http.post(url, headers: {'Authorization': 'Bearer $token'});
+    
+    // TODO: Sync to backend in background
   }
 }

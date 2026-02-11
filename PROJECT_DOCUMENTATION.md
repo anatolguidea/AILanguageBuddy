@@ -874,3 +874,33 @@ Ensure your Java Backend is running on port 8080. It will automatically connect 
 - **Gamification**: Badges, streaks, and daily goals.
 - **Spaced Repetition System (SRS)**: Flashcards for vocabulary learned in chat.
 - **Apple Sign-In**: Implement native Apple auth.
+
+---
+
+## 7. Interactive Lessons Refactor (Implemented)
+- **Date**: February 11, 2026
+- **Objective**: Transform lessons from static text to a Duolingo-style interactive platform with local persistence.
+
+### A. Architecture Upgrade
+- **Layer Separation**: Enforced strict Clean Architecture (Domain, Data, Presentation).
+- **Polymorphism**: Introduced `Exercise` abstract class with `ArrangeWordsExercise` implementation.
+- **State Management**: Migrated to `LessonSessionController` (StateNotifier) for robust session logic.
+
+### B. Persistence Layer (Drift/SQLite)
+- **Technology**: Implemented `drift` for type-safe SQLite access.
+- **Schema**:
+    - `LessonProgressTable`: Tracks completion status and stars per lesson/language.
+    - `WordStrengthTable`: Foundation for Spaced Repetition System (SRS).
+- **Data Flow**: `LessonsRepository` now prioritizes local DB for progress, ensuring offline capability.
+
+### C. UX Improvements
+- **Interactive Session**: Created `LessonSessionPage` with:
+    - Real-time progress bar.
+    - Lives/Hearts system.
+    - Specialized `ArrangeWordsWidget` with drag-and-drop mechanics.
+    - Feedback bottom sheet for immediate validation.
+- **Navigation**: Updated `LessonsPage` to launch the new session flow.
+
+### D. Validation
+- **Dependencies**: Added `drift`, `sqlite3_flutter_libs`, `build_runner`.
+- **Code Generation**: Run `dart run build_runner build` to generate database code.

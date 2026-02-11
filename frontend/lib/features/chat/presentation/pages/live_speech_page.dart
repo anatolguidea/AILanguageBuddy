@@ -172,13 +172,13 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
       _channelSubscription = _channel!.stream.listen(
         (message) {
           if (message is String) {
-            print('WS Text: $message');
+            // print('WS Text: $message'); // Commented out to reduce noise
             _handleTextEvent(message);
           } else {
             final length = message is Uint8List
                 ? message.length
                 : (message as List).length;
-            print('WS Binary: ${message.runtimeType} length: $length');
+            // print('WS Binary: ${message.runtimeType} length: $length'); // Commented out
             final Uint8List bytes = message is Uint8List
                 ? message
                 : Uint8List.fromList(List<int>.from(message));
@@ -559,6 +559,7 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
   }
 
   void _logAudioTelemetry() {
+    /*
     final startedAt = _audioStreamStartedAt;
     final durationMs = startedAt == null
         ? 0
@@ -567,6 +568,7 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
       'Voice stream telemetry: chunks=$_receivedChunkCount dropped=$_droppedChunkCount '
       'peakQueueBytes=$_peakQueuedAudioBytes durationMs=$durationMs',
     );
+    */
   }
 
   int? _asPositiveInt(dynamic value) {

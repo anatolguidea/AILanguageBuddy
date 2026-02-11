@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'exercise.dart';
 
 enum LessonStatus { locked, available, completed }
 
@@ -9,7 +10,9 @@ class Lesson extends Equatable {
   final LessonStatus status;
   final int orderIndex;
   final String languageCode;
-  final Map<String, dynamic> content;
+  final int xpReward;
+  final String estimatedTime;
+  final List<Exercise> exercises;
 
   const Lesson({
     required this.id,
@@ -18,35 +21,35 @@ class Lesson extends Equatable {
     required this.status,
     required this.orderIndex,
     required this.languageCode,
-    required this.content,
+    this.xpReward = 10,
+    this.estimatedTime = '5 min',
+    this.exercises = const [],
   });
 
-  factory Lesson.fromJson(
-    Map<String, dynamic> json, {
-    required String languageCode,
+  // Factory/parsing logic will be moved to a Mapper in Data layer to keep Domain pure
+  
+  Lesson copyWith({
+    String? id,
+    String? title,
+    String? description,
+    LessonStatus? status,
+    int? orderIndex,
+    String? languageCode,
+    int? xpReward,
+    String? estimatedTime,
+    List<Exercise>? exercises,
   }) {
     return Lesson(
-      id: json['id'] ?? '',
-      title: json['title'] ?? '',
-      description: json['description'] ?? '',
-      status: _parseStatus(json['status']),
-      orderIndex: json['orderIndex'] ?? 0,
-      languageCode: languageCode,
-      content: json['content'] ?? {},
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      status: status ?? this.status,
+      orderIndex: orderIndex ?? this.orderIndex,
+      languageCode: languageCode ?? this.languageCode,
+      xpReward: xpReward ?? this.xpReward,
+      estimatedTime: estimatedTime ?? this.estimatedTime,
+      exercises: exercises ?? this.exercises,
     );
-  }
-
-  static LessonStatus _parseStatus(String? status) {
-    switch (status) {
-      case 'available':
-        return LessonStatus.available;
-      case 'completed':
-        return LessonStatus.completed;
-      case 'started':
-        return LessonStatus.available;
-      default:
-        return LessonStatus.locked;
-    }
   }
 
   @override
@@ -57,6 +60,8 @@ class Lesson extends Equatable {
     status,
     orderIndex,
     languageCode,
-    content,
+    xpReward,
+    estimatedTime,
+    exercises,
   ];
 }
