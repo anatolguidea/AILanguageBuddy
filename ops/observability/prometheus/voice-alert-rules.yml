@@ -1,0 +1,53 @@
+groups:
+  - name: voice-runtime-alerts
+    interval: 30s
+    rules:
+      - alert: VoiceTurnFailureRateHigh
+        expr: |
+          (
+            sum(rate(voice_turn_failed_total[5m])) /
+            clamp_min(sum(rate(voice_turn_started_total[5m])), 0.001)
+          ) > 0.15
+        for: 10m
+        labels:
+          severity: warning
+          team: ai-platform
+        annotations:
+          summary: "Voice turn failure rate is high"
+          description: "Failure ratio over 5m is above 15% for at least 10m."
+
+      - alert: VoiceTurnP95LatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(voice_turn_processing_duration_seconds_bucket[5m]))
+          ) > 4
+        for: 10m
+        labels:
+          severity: warning
+          team: ai-platform
+        annotations:
+          summary: "Voice turn latency p95 is high"
+          description: "P95 voice turn processing latency is above 4s for at least 10m."
+
+      - alert: VoiceAuthFailuresSpike
+        expr: |
+          sum(rate(voice_ws_connections_auth_failures_total[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          team: ai-platform
+        annotations:
+          summary: "Voice websocket auth failures are elevated"
+          description: "Auth failures are above 0.2/sec in the last 5 minutes."
+
+      - alert: VoiceAudioDropsDetected
+        expr: |
+          increase(voice_ws_errors_total{code="audio_too_large"}[15m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: ai-platform
+        annotations:
+          summary: "Audio turn payload issues detected"
+          description: "audio_too_large errors exceeded 10 in the last 15 minutes."

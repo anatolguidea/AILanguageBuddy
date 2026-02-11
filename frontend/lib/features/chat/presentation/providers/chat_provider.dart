@@ -5,9 +5,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import '../../data/models/chat_models.dart';
+import '../../../../core/config.dart';
 
 // Constants
-const String kBaseUrl = 'http://192.168.107.166:8080/api/v1/chat';
+// Constants
+// const String kBaseUrl = 'http://192.168.107.166:8080/api/v1/chat'; // REMOVED: Use ApiRoutes
 
 // Provider
 final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>((ref) {
@@ -134,8 +136,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
         'Authorization': 'Bearer $token',
       };
 
+      // Changed: Use ApiRoutes.chatHistory(limit: 50) + manual query param for mode
+      // Because ApiRoutes.chatHistory returns ".../v2?limit=50", we append "&mode=..."
+      final uriString = '${ApiRoutes.chatHistory(limit: 50)}&mode=$scenarioId';
+
       final response = await http.get(
-        Uri.parse('$kBaseUrl/history/v2?limit=50&mode=$scenarioId'),
+        Uri.parse(uriString),
         headers: headers,
       ).timeout(const Duration(seconds: 10));
 
@@ -188,8 +194,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
         targetLanguage: targetLanguage,
       ).toJson();
 
+      // Changed: Use ApiRoutes.chatAsk()
       final response = await http.post(
-        Uri.parse('$kBaseUrl/ask'),
+        Uri.parse(ApiRoutes.chatAsk()),
         headers: headers,
         body: jsonEncode(body),
       ).timeout(const Duration(seconds: 10));

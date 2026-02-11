@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 import torch
@@ -50,6 +50,12 @@ async def lifespan(app: FastAPI):
         from chatterbox.tts_turbo import ChatterboxTurboTTS
         tts_model = ChatterboxTurboTTS.from_pretrained(device=MODEL_DEVICE)
         print("Chatterbox-Turbo loaded successfully.")
+        try:
+            with torch.inference_mode():
+                _ = tts_model.generate("System ready.")
+            print("Chatterbox warmup completed.")
+        except Exception as warmup_error:
+            print(f"Chatterbox warmup skipped: {warmup_error}")
     except Exception as e:
         print(f"Failed to load Chatterbox model: {e}")
         print("Running in MOCK mode for TTS.")
@@ -85,7 +91,8 @@ def health_check():
         "status": "ok", 
         "device": MODEL_DEVICE, 
         "tts_loaded": tts_model is not None,
-        "stt_loaded": stt_model is not None
+        "stt_loaded": stt_model is not None,
+        "tts_sample_rate": 24000
     }
 
 import wave
@@ -94,17 +101,18 @@ import wave
 import logging
 import traceback
 import sys
+import threading
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+tts_lock = threading.Lock()
 
 # ... (imports)
 
-@app.post("/transcribe")
-async def transcribe(file: UploadFile = File(...)):
+async def _transcribe_internal(file: UploadFile, beam_size: int, max_words: int | None = None):
     """
-    Transcribes uploaded audio file to text.
+    Shared transcription path for full and partial endpoints.
     Handles both Raw PCM (16k/16bit/mono) and WAV files.
     """
     global stt_model
@@ -136,9 +144,12 @@ async def transcribe(file: UploadFile = File(...)):
                 raise HTTPException(status_code=400, detail=f"Failed to wrap PCM: {e}")
 
         # Transcribe
-        segments, info = stt_model.transcribe(audio_data, beam_size=5)
+        segments, info = stt_model.transcribe(audio_data, beam_size=beam_size)
         
         transcribed_text = " ".join([segment.text for segment in segments]).strip()
+        if max_words is not None and max_words > 0 and transcribed_text:
+            words = transcribed_text.split()
+            transcribed_text = " ".join(words[:max_words])
         logger.info(f"Transcription success: '{transcribed_text}'")
         
         return {"text": transcribed_text}
@@ -148,6 +159,15 @@ async def transcribe(file: UploadFile = File(...)):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/transcribe")
+async def transcribe(file: UploadFile = File(...)):
+    return await _transcribe_internal(file=file, beam_size=5)
+
+@app.post("/transcribe/partial")
+async def transcribe_partial(file: UploadFile = File(...), max_words: int = Query(default=20, ge=3, le=60)):
+    # Fast/cheap configuration for in-progress transcript updates.
+    return await _transcribe_internal(file=file, beam_size=1, max_words=max_words)
+
 @app.post("/synthesize/raw")
 def synthesize_raw(request: SpeakRequest):
     global tts_model
@@ -156,7 +176,10 @@ def synthesize_raw(request: SpeakRequest):
     
     try:
         logger.info(f"Synthesizing text: '{request.text}'")
-        wav = tts_model.generate(request.text)
+        # Serialize model generation to avoid concurrent contention on model resources.
+        with tts_lock:
+            with torch.inference_mode():
+                wav = tts_model.generate(request.text)
         
         # Ensure tensor is on CPU
         if hasattr(wav, 'cpu'):
@@ -178,7 +201,11 @@ def synthesize_raw(request: SpeakRequest):
         
         logger.info(f"Generated audio bytes: {len(wav_int16.tobytes())}")
         
-        return Response(content=wav_int16.tobytes(), media_type="application/octet-stream")
+        return Response(
+            content=wav_int16.tobytes(),
+            media_type="application/octet-stream",
+            headers={"X-Audio-Sample-Rate": "24000", "X-Audio-Format": "pcm16le-mono"},
+        )
         
     except Exception as e:
         logger.error(f"Synthesis error: {e}")

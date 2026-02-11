@@ -59,6 +59,12 @@
 			</array>
 		</dict>
 	</array>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>We need access to your local network to connect to the AI server.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_http._tcp</string>
+    </array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>

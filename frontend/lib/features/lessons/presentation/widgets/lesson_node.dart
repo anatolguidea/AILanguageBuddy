@@ -31,8 +31,8 @@ class LessonNode extends StatelessWidget {
               color: isCompleted
                   ? AppColors.primary
                   : isAvailable
-                      ? AppColors.surfaceElevated
-                      : AppColors.surfaceDark,
+                  ? AppColors.surfaceElevated
+                  : AppColors.surfaceDark,
               border: Border.all(
                 color: isAvailable ? AppColors.primary : Colors.transparent,
                 width: 3,
@@ -40,16 +40,18 @@ class LessonNode extends StatelessWidget {
               boxShadow: isAvailable
                   ? [
                       BoxShadow(
-                        color: AppColors.primary.withOpacity(0.3),
+                        color: AppColors.primary.withValues(alpha: 0.3),
                         blurRadius: 15,
                         spreadRadius: 2,
-                      )
+                      ),
                     ]
                   : null,
             ),
             child: Icon(
               isCompleted ? Icons.check : Icons.lock_open,
-              color: isCompleted || isAvailable ? Colors.white : AppColors.textTertiary,
+              color: isCompleted || isAvailable
+                  ? Colors.white
+                  : AppColors.textTertiary,
               size: 30,
             ),
           ),
@@ -58,9 +60,11 @@ class LessonNode extends StatelessWidget {
         Text(
           lesson.title,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: isAvailable || isCompleted ? AppColors.textPrimary : AppColors.textTertiary,
-                fontWeight: isAvailable ? FontWeight.bold : FontWeight.normal,
-              ),
+            color: isAvailable || isCompleted
+                ? AppColors.textPrimary
+                : AppColors.textTertiary,
+            fontWeight: isAvailable ? FontWeight.bold : FontWeight.normal,
+          ),
         ),
         if (!isLast) ...[
           const SizedBox(height: 8),
@@ -68,7 +72,9 @@ class LessonNode extends StatelessWidget {
             width: 4,
             height: 40,
             decoration: BoxDecoration(
-              color: isCompleted ? AppColors.primary : AppColors.surfaceElevated,
+              color: isCompleted
+                  ? AppColors.primary
+                  : AppColors.surfaceElevated,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
