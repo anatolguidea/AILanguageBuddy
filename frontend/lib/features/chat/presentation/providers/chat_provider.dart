@@ -5,9 +5,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import '../../data/models/chat_models.dart';
+import '../../../../core/config.dart';
 
 // Constants
-const String kBaseUrl = 'http://192.168.107.166:8080/api/v1/chat';
+String get kBaseUrl => '$defaultBackendBaseUrl/api/v1/chat';
 
 // Provider
 final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>((ref) {

@@ -12,14 +12,21 @@ import '../../../../theme/app_colors.dart';
 import '../providers/chat_provider.dart';
 
 // Helper to convert HTTP URL to WS URL
-String _getWsUrl(String? userId) {
+String _getWsUrl(String? userId, String? accessToken) {
   final uri = Uri.parse(kBaseUrl);
   final scheme = uri.scheme == 'https' ? 'wss' : 'ws';
   final host = uri.host;
   final port = uri.port;
   String url = '$scheme://$host:$port/ws/voice';
-  if (userId != null) {
-    url += '?userId=$userId';
+  final query = <String>[];
+  if (userId != null && userId.isNotEmpty) {
+    query.add('userId=$userId');
+  }
+  if (accessToken != null && accessToken.isNotEmpty) {
+    query.add('token=$accessToken');
+  }
+  if (query.isNotEmpty) {
+    url += '?${query.join('&')}';
   }
   return url;
 }
@@ -91,7 +98,9 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
   Future<void> connect() async {
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
-      final url = _getWsUrl(userId);
+      final accessToken =
+          Supabase.instance.client.auth.currentSession?.accessToken;
+      final url = _getWsUrl(userId, accessToken);
       print('Attempting to connect to WS: $url');
       _channel = WebSocketChannel.connect(Uri.parse(url));
       await _channel!.ready; // Wait for connection to be established
