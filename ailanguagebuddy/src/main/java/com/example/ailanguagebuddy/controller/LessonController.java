@@ -25,7 +25,7 @@ public class LessonController {
     @GetMapping
     public ResponseEntity<List<LessonDto>> getLessons(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestParam(defaultValue = "es") String language) {
+            @RequestParam(required = false) String language) {
         var user = authUserResolver.fromJwt(jwt);
         return ResponseEntity.ok(lessonService.getLessonsForUser(user.userId(), language));
     }

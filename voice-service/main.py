@@ -9,6 +9,8 @@ import uvicorn
 import numpy as np
 import audioop
 from contextlib import asynccontextmanager
+import asyncio
+import edge_tts
 
 # Initialize API
 app = FastAPI(title="Voice Service using Chatterbox")
@@ -20,6 +22,17 @@ MODEL_DEVICE = "mps"
 STREAM_CHUNK_BYTES = 8 * 1024
 STT_MODEL_REPO = os.getenv("MLX_WHISPER_MODEL", "mlx-community/whisper-tiny")
 SILENCE_RMS_THRESHOLD = 220
+EDGE_VOICE_BY_LANGUAGE = {
+    "fr": "fr-FR-DeniseNeural",
+    "es": "es-ES-ElviraNeural",
+    "de": "de-DE-KatjaNeural",
+    "it": "it-IT-ElsaNeural",
+    "pt": "pt-BR-FranciscaNeural",
+    "ru": "ru-RU-SvetlanaNeural",
+    "zh": "zh-CN-XiaoxiaoNeural",
+    "ja": "ja-JP-NanamiNeural",
+    "ko": "ko-KR-SunHiNeural",
+}
 
 # Mock Class
 class MockTTS:
@@ -250,6 +263,65 @@ def synthesize_raw(request: SpeakRequest):
         
     except Exception as e:
         logger.error(f"Synthesis error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def _synthesize_edge_mp3(text: str, language: str) -> bytes:
+    # Default to Spanish if language not found in map, or fallback to 'en' key if you want, 
+    # but since this function is for edge, we likely want a safe valid voice.
+    # If language is unknown, let's try 'es' as a safe fallback or just pick the first one.
+    voice = EDGE_VOICE_BY_LANGUAGE.get(language, EDGE_VOICE_BY_LANGUAGE["es"])
+    
+    communicate = edge_tts.Communicate(text=text, voice=voice)
+    chunks = []
+    async for chunk in communicate.stream():
+        if chunk.get("type") == "audio":
+            chunks.append(chunk["data"])
+    return b"".join(chunks)
+
+@app.post("/synthesize/instant")
+def synthesize_instant(request: SpeakRequest):
+    language = (request.language or "en").lower()
+    text = (request.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Text must not be empty")
+
+    # If NOT English, use Edge-TTS
+    if language != "en":
+        try:
+            logger.info(f"Instant edge-tts synthesis ({language}): '{text}'")
+            audio_mp3 = asyncio.run(_synthesize_edge_mp3(text, language))
+            return Response(
+                content=audio_mp3,
+                media_type="audio/mpeg",
+                headers={"X-Audio-Codec": "mp3", "X-Audio-Sample-Rate": "24000"},
+            )
+        except Exception as e:
+            logger.error(f"edge-tts synthesis error: {e}")
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # Else (English), use Chatterbox
+    try:
+        if not tts_model:
+            raise HTTPException(status_code=503, detail="TTS Model not loaded")
+        logger.info(f"Instant chatterbox synthesis ({language}): '{text}'")
+        with torch.inference_mode(), torch.no_grad():
+            wav = tts_model.generate(text)
+
+        if hasattr(wav, 'cpu'):
+            wav = wav.cpu()
+        wav_numpy = wav.numpy() if hasattr(wav, 'numpy') else np.array(wav)
+        wav_numpy = wav_numpy.squeeze()
+        wav_int16 = (np.clip(wav_numpy, -1, 1) * 32767).astype(np.int16)
+
+        return Response(
+            content=wav_int16.tobytes(),
+            media_type="application/octet-stream",
+            headers={"X-Audio-Codec": "pcm16", "X-Audio-Sample-Rate": "24000"},
+        )
+    except Exception as e:
+        logger.error(f"Instant chatterbox synthesis error: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
