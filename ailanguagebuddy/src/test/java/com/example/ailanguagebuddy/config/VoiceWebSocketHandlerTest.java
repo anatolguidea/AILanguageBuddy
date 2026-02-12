@@ -49,6 +49,7 @@ class VoiceWebSocketHandlerTest {
     @BeforeEach
     void setUp() {
         useCase = mock(ProcessVoiceTurnUseCase.class);
+        when(useCase.isStreamingAvailable()).thenReturn(false);
         partialUseCase = mock(GeneratePartialTranscriptUseCase.class);
         ttsPort = mock(TextToSpeechPort.class);
         jwtDecoder = mock(JwtDecoder.class);
@@ -83,6 +84,7 @@ class VoiceWebSocketHandlerTest {
         handler.afterConnectionEstablished(fixture.session);
         handler.handleBinaryMessage(fixture.session, new BinaryMessage(new byte[] { 1, 2, 3 }));
         handler.handleTextMessage(fixture.session, new TextMessage("{\"event\":\"end_turn\"}"));
+        awaitEvent(fixture.sentMessages, "audio_end", 2000);
 
         List<JsonNode> textEvents = textEvents(fixture.sentMessages);
         assertEquals("connected", textEvents.get(0).path("event").asText());
@@ -110,6 +112,7 @@ class VoiceWebSocketHandlerTest {
         handler.afterConnectionEstablished(fixture.session);
         handler.handleBinaryMessage(fixture.session, new BinaryMessage(new byte[] { 3, 4, 5 }));
         handler.handleTextMessage(fixture.session, new TextMessage("{\"event\":\"end_turn\"}"));
+        awaitEvent(fixture.sentMessages, "error", 2000);
 
         List<JsonNode> textEvents = textEvents(fixture.sentMessages);
         JsonNode error = textEvents.get(textEvents.size() - 1);
@@ -132,6 +135,7 @@ class VoiceWebSocketHandlerTest {
         handler.handleTextMessage(fixture.session, new TextMessage("{\"event\":\"start_turn\"}"));
         handler.handleBinaryMessage(fixture.session, new BinaryMessage(new byte[] { 1, 2, 3 }));
         handler.handleTextMessage(fixture.session, new TextMessage("{\"event\":\"end_turn\"}"));
+        awaitEvent(fixture.sentMessages, "audio_end", 2000);
 
         List<JsonNode> events = textEvents(fixture.sentMessages);
         long partialCount = events.stream()
@@ -175,6 +179,7 @@ class VoiceWebSocketHandlerTest {
         handler.handleTextMessage(fixture.session, new TextMessage("{\"event\":\"start_turn\"}"));
         handler.handleBinaryMessage(fixture.session, new BinaryMessage(new byte[] { 9, 9, 9 }));
         handler.handleTextMessage(fixture.session, new TextMessage("{\"event\":\"end_turn\"}"));
+        awaitEvent(fixture.sentMessages, "audio_end", 2000);
 
         verify(useCase).executeTextOnly(argThat(bytes -> Arrays.equals(bytes, new byte[] { 9, 9, 9 })), eq(userId));
     }
@@ -265,6 +270,28 @@ class VoiceWebSocketHandlerTest {
                 .filter(event -> eventType.equals(event.path("event").asText()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Expected event not found: " + eventType));
+    }
+
+    /**
+     * Poll the sent messages list until a text event with the given type appears,
+     * or until the timeout expires. This handles the async processBufferedAudio
+     * dispatch.
+     */
+    private void awaitEvent(List<WebSocketMessage<?>> sentMessages, String eventType, long timeoutMs)
+            throws Exception {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            for (WebSocketMessage<?> msg : List.copyOf(sentMessages)) {
+                if (msg instanceof TextMessage txt) {
+                    JsonNode node = objectMapper.readTree(txt.getPayload());
+                    if (eventType.equals(node.path("event").asText())) {
+                        return;
+                    }
+                }
+            }
+            Thread.sleep(25);
+        }
+        throw new IllegalStateException("Timed out waiting for event: " + eventType);
     }
 
     private record SessionFixture(WebSocketSession session, Map<String, Object> attributes,

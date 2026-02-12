@@ -4,6 +4,7 @@ import com.example.ailanguagebuddy.service.voice.SpeechToTextPort;
 import com.example.ailanguagebuddy.service.voice.PartialSpeechToTextPort;
 import com.example.ailanguagebuddy.service.voice.TextToSpeechPort;
 import com.example.ailanguagebuddy.service.voice.VoiceTurnException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.http.MediaType;
@@ -14,9 +15,14 @@ import org.springframework.util.MultiValueMap;
 public class VoiceServiceClient implements SpeechToTextPort, PartialSpeechToTextPort, TextToSpeechPort {
 
     private final RestClient restClient;
+    private final int sttSampleRate;
 
-    public VoiceServiceClient(RestClient.Builder builder) {
-        this.restClient = builder.baseUrl("http://localhost:8000").build();
+    public VoiceServiceClient(
+            RestClient.Builder builder,
+            @Value("${voice-service.base-url:http://localhost:8000}") String baseUrl,
+            @Value("${voice.stt.sample-rate:16000}") int sttSampleRate) {
+        this.restClient = builder.baseUrl(baseUrl).build();
+        this.sttSampleRate = sttSampleRate;
     }
 
     public String transcribe(byte[] audioData) {
@@ -59,6 +65,7 @@ public class VoiceServiceClient implements SpeechToTextPort, PartialSpeechToText
         };
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("file", resource);
+        body.add("sample_rate", Integer.toString(sttSampleRate));
         return restClient.post()
                 .uri(path)
                 .contentType(MediaType.MULTIPART_FORM_DATA)

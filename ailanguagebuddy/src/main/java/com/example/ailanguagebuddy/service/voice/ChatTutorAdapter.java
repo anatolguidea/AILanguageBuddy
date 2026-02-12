@@ -9,8 +9,9 @@ import java.util.UUID;
 
 @Component
 public class ChatTutorAdapter implements TutorModelPort {
-    private static final int MAX_VOICE_REPLY_SENTENCES = 2;
+    private static final int MAX_VOICE_REPLY_SENTENCES = 1;
     private static final int MAX_VOICE_REPLY_CHARS = 220;
+    private static final int MAX_VOICE_REPLY_WORDS = 15;
     private final ChatService chatService;
 
     public ChatTutorAdapter(ChatService chatService) {
@@ -50,11 +51,39 @@ public class ChatTutorAdapter implements TutorModelPort {
             compact.append(s);
             sentenceCount++;
         }
+        String candidate;
         if (compact.length() == 0) {
-            return normalized.length() <= MAX_VOICE_REPLY_CHARS
+            candidate = normalized.length() <= MAX_VOICE_REPLY_CHARS
                     ? normalized
                     : normalized.substring(0, MAX_VOICE_REPLY_CHARS).trim();
         }
-        return compact.toString();
+        else {
+            candidate = compact.toString();
+        }
+        return applyConciseRules(candidate);
+    }
+
+    private String applyConciseRules(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String[] words = text.trim().split("\\s+");
+        int limit = Math.min(words.length, MAX_VOICE_REPLY_WORDS);
+        String compact = String.join(" ", java.util.Arrays.copyOfRange(words, 0, limit)).trim();
+        if (compact.isEmpty()) {
+            return "";
+        }
+        int questionCount = 0;
+        StringBuilder cleaned = new StringBuilder(compact.length());
+        for (int i = 0; i < compact.length(); i++) {
+            char c = compact.charAt(i);
+            if (c == '?') {
+                questionCount++;
+                cleaned.append(questionCount > 1 ? '.' : '?');
+            } else {
+                cleaned.append(c);
+            }
+        }
+        return cleaned.toString().trim();
     }
 }

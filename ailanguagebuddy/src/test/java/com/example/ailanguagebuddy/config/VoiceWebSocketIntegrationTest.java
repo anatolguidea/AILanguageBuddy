@@ -42,18 +42,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@SpringBootTest(
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {
-                "spring.autoconfigure.exclude=org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration,org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration,org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration,org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration,org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration",
-                "spring.ai.model.chat=none",
-                "spring.ai.model.audio.speech=none",
-                "spring.ai.model.audio.transcription=none",
-                "spring.ai.model.embedding=none",
-                "spring.ai.model.image=none",
-                "spring.ai.model.moderation=none"
-        },
-        classes = VoiceWebSocketIntegrationTest.TestApplication.class)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
+        "spring.autoconfigure.exclude=org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration,org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration,org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration,org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration,org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration",
+        "spring.ai.model.chat=none",
+        "spring.ai.model.audio.speech=none",
+        "spring.ai.model.audio.transcription=none",
+        "spring.ai.model.embedding=none",
+        "spring.ai.model.image=none",
+        "spring.ai.model.moderation=none"
+}, classes = VoiceWebSocketIntegrationTest.TestApplication.class)
 class VoiceWebSocketIntegrationTest {
 
     private static final UUID TEST_USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
@@ -79,11 +76,11 @@ class VoiceWebSocketIntegrationTest {
                     throw new IllegalArgumentException("Invalid token");
                 }
                 return Jwt.withTokenValue(token)
-                    .header("alg", "HS256")
-                    .subject(TEST_USER_ID.toString())
-                    .issuedAt(Instant.now())
-                    .expiresAt(Instant.now().plusSeconds(3600))
-                    .build();
+                        .header("alg", "HS256")
+                        .subject(TEST_USER_ID.toString())
+                        .issuedAt(Instant.now())
+                        .expiresAt(Instant.now().plusSeconds(3600))
+                        .build();
             };
         }
 
@@ -113,7 +110,7 @@ class VoiceWebSocketIntegrationTest {
         @Bean
         ProcessVoiceTurnUseCase processVoiceTurnUseCase(SpeechToTextPort stt, TutorModelPort tutor,
                 TextToSpeechPort tts) {
-            return new ProcessVoiceTurnUseCase(stt, tutor, tts);
+            return new ProcessVoiceTurnUseCase(stt, tutor, tts, null);
         }
 
         @Bean
@@ -326,7 +323,8 @@ class VoiceWebSocketIntegrationTest {
             return events;
         }
 
-        List<JsonNode> awaitTextEventsUntil(ObjectMapper objectMapper, String targetEvent, int maxEvents) throws Exception {
+        List<JsonNode> awaitTextEventsUntil(ObjectMapper objectMapper, String targetEvent, int maxEvents)
+                throws Exception {
             java.util.ArrayList<JsonNode> events = new java.util.ArrayList<>();
             for (int i = 0; i < maxEvents; i++) {
                 JsonNode event = awaitText(objectMapper);

@@ -1,5 +1,6 @@
 package com.example.ailanguagebuddy.config;
 
+import com.example.ailanguagebuddy.service.ReactiveVoiceServiceClient;
 import com.example.ailanguagebuddy.service.voice.ProcessVoiceTurnUseCase;
 import com.example.ailanguagebuddy.service.voice.GeneratePartialTranscriptUseCase;
 import com.example.ailanguagebuddy.service.voice.TextToSpeechPort;
@@ -29,14 +30,19 @@ import org.springframework.web.util.UriComponentsBuilder;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Component
 public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
@@ -54,7 +60,12 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
     private static final int DEFAULT_PREBUFFER_BYTES = 12 * 1024;
     private static final int DEFAULT_QUEUE_HIGH_WATERMARK_BYTES = 2 * 1024 * 1024;
     private static final int DEFAULT_QUEUE_TRIM_TARGET_BYTES = 1536 * 1024;
-    private enum SessionState { CONNECTED, LISTENING, PROCESSING }
+    private static final Duration TTS_STREAM_TIMEOUT = Duration.ofSeconds(60);
+    private static final long FIRST_AUDIO_CHUNK_DELAY_MS = 100L;
+
+    private enum SessionState {
+        CONNECTED, LISTENING, PROCESSING
+    }
 
     private final ProcessVoiceTurnUseCase processVoiceTurnUseCase;
     private final GeneratePartialTranscriptUseCase generatePartialTranscriptUseCase;
@@ -137,6 +148,7 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
     private final ConcurrentHashMap<String, Long> sessionLastPartialAt = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> sessionLastPartialText = new ConcurrentHashMap<>();
     private final ScheduledExecutorService housekeepingExecutor = Executors.newSingleThreadScheduledExecutor();
+    private final ExecutorService voiceProcessingExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
     @PostConstruct
     public void startHousekeeping() {
@@ -149,6 +161,7 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
     @PreDestroy
     public void shutdownHousekeeping() {
         housekeepingExecutor.shutdownNow();
+        voiceProcessingExecutor.shutdownNow();
     }
 
     private void runHousekeepingSafely() {
@@ -271,7 +284,8 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
                     sendError(session, "session_not_initialized", "Voice session state is not initialized");
                     return;
                 }
-                // Backward compatibility for clients that stream audio before explicit start_turn.
+                // Backward compatibility for clients that stream audio before explicit
+                // start_turn.
                 if (state == SessionState.CONNECTED) {
                     sessionStates.put(session.getId(), SessionState.LISTENING);
                     turnStartedCounter.increment();
@@ -316,7 +330,8 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
             } else if (VoiceEventType.END_TURN.equals(controlEvent)) {
                 SessionState state = sessionStates.get(session.getId());
                 if (state != SessionState.LISTENING) {
-                    sendError(session, "invalid_state", "Cannot end turn in state " + (state == null ? "unknown" : state.name().toLowerCase()));
+                    sendError(session, "invalid_state",
+                            "Cannot end turn in state " + (state == null ? "unknown" : state.name().toLowerCase()));
                     return;
                 }
                 sessionStates.put(session.getId(), SessionState.PROCESSING);
@@ -336,13 +351,24 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
     }
 
     private void processBufferedAudio(WebSocketSession session) {
+        // Dispatch to a virtual thread so the WebSocket thread is free immediately.
+        CompletableFuture.runAsync(() -> processBufferedAudioInternal(session), voiceProcessingExecutor)
+                .exceptionally(ex -> {
+                    System.err.println("Async voice processing failed: " + ex.getMessage());
+                    sendError(session, "voice_turn_failed", ex.getMessage());
+                    sessionStates.put(session.getId(), SessionState.CONNECTED);
+                    return null;
+                });
+    }
+
+    private void processBufferedAudioInternal(WebSocketSession session) {
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
             java.io.ByteArrayOutputStream buffer = sessionAudioBuffers.get(session.getId());
             if (buffer == null || buffer.size() == 0) {
                 sendError(session, "empty_audio", "No audio received for this turn");
                 sessionStates.put(session.getId(), SessionState.CONNECTED);
-                return; // Nothing to process
+                return;
             }
 
             byte[] completeAudio = buffer.toByteArray();
@@ -352,18 +378,13 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
             System.out.println("Processing audio turn: " + completeAudio.length + " bytes");
             UUID userId = (UUID) session.getAttributes().get("userId");
             sendEvent(session, VoiceEventType.PROCESSING, "Transcribing and generating answer");
-            ProcessVoiceTurnUseCase.TurnTextResult result = processVoiceTurnUseCase.executeTextOnly(completeAudio, userId);
-            emitFallbackPartialTranscriptEvents(session, result.transcript());
-            sendEvent(session, VoiceEventType.TRANSCRIPT, result.transcript());
-            emitAssistantPartialEvents(session, result.replyText());
-            sendEvent(session, VoiceEventType.ASSISTANT_TEXT, result.replyText());
 
-            int outputBytes = 0;
-            if (session.isOpen()) {
-                outputBytes = streamSegmentedReplyAudio(session, result.replyText());
-                sendEvent(session, VoiceEventType.AUDIO_END, "Audio stream complete");
+            if (processVoiceTurnUseCase.isStreamingAvailable()) {
+                processStreamingPipeline(session, completeAudio, userId);
+            } else {
+                processSequentialPipeline(session, completeAudio, userId);
             }
-            turnOutputAudioBytesSummary.record(outputBytes);
+
             turnCompletedCounter.increment();
         } catch (VoiceTurnException e) {
             turnFailedCounter.increment();
@@ -378,6 +399,67 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
             sessionStates.put(session.getId(), SessionState.CONNECTED);
             touchSession(session.getId());
         }
+    }
+
+    // ─── Streaming pipeline: STT → filler → LLM(stream) → TTS per sentence ───
+
+    private void processStreamingPipeline(WebSocketSession session, byte[] audio, UUID userId) throws Exception {
+        final int[] outputBytes = { 0 };
+        final StringBuilder progressiveText = new StringBuilder();
+        // Arm the client-side streaming player before first binary audio chunk arrives.
+        sendEvent(session, VoiceEventType.ASSISTANT_TEXT, "");
+
+        ProcessVoiceTurnUseCase.TurnTextResult result = processVoiceTurnUseCase.executeStreaming(
+                audio, userId, (sentence) -> {
+                    try {
+                        // 1. Emit real assistant_partial with progressive text
+                        if (progressiveText.length() > 0) {
+                            progressiveText.append(' ');
+                        }
+                        progressiveText.append(sentence);
+                        sendEvent(session, VoiceEventType.ASSISTANT_PARTIAL, progressiveText.toString());
+
+                        // 2. TTS this sentence immediately and stream audio.
+                        outputBytes[0] += streamRealtimeSentenceAudio(session, sentence);
+                    } catch (Exception e) {
+                        System.err.println("Error in streaming sentence callback: " + e.getMessage());
+                    }
+                });
+
+        // Emit transcript + full text events
+        emitFallbackPartialTranscriptEvents(session, result.transcript());
+        sendEvent(session, VoiceEventType.TRANSCRIPT, result.transcript());
+
+        if (outputBytes[0] == 0) {
+            // Streaming sentence path produced no bytes; send full text + fallback segmented TTS.
+            sendEvent(session, VoiceEventType.ASSISTANT_TEXT, result.replyText());
+            // Fallback: TTS the full reply if per-sentence TTS failed
+            int fallbackBytes = streamSegmentedReplyAudio(session, result.replyText());
+            turnOutputAudioBytesSummary.record(fallbackBytes);
+        } else {
+            turnOutputAudioBytesSummary.record(outputBytes[0]);
+        }
+
+        if (session.isOpen()) {
+            sendEvent(session, VoiceEventType.AUDIO_END, "Audio stream complete");
+        }
+    }
+
+    // ─── Sequential pipeline (fallback): STT → full LLM → TTS segments ───
+
+    private void processSequentialPipeline(WebSocketSession session, byte[] audio, UUID userId) throws Exception {
+        ProcessVoiceTurnUseCase.TurnTextResult result = processVoiceTurnUseCase.executeTextOnly(audio, userId);
+        emitFallbackPartialTranscriptEvents(session, result.transcript());
+        sendEvent(session, VoiceEventType.TRANSCRIPT, result.transcript());
+        emitAssistantPartialEvents(session, result.replyText());
+        sendEvent(session, VoiceEventType.ASSISTANT_TEXT, result.replyText());
+
+        int outputBytes = 0;
+        if (session.isOpen()) {
+            outputBytes = streamSegmentedReplyAudio(session, result.replyText());
+            sendEvent(session, VoiceEventType.AUDIO_END, "Audio stream complete");
+        }
+        turnOutputAudioBytesSummary.record(outputBytes);
     }
 
     private void emitFallbackPartialTranscriptEvents(WebSocketSession session, String transcript) throws Exception {
@@ -405,7 +487,8 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
         }
     }
 
-    private void maybeEmitIncrementalPartial(WebSocketSession session, java.io.ByteArrayOutputStream buffer) throws Exception {
+    private void maybeEmitIncrementalPartial(WebSocketSession session, java.io.ByteArrayOutputStream buffer)
+            throws Exception {
         String sessionId = session.getId();
         if (sessionStates.get(sessionId) != SessionState.LISTENING) {
             return;
@@ -518,16 +601,76 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
         return segments;
     }
 
+    private int streamRealtimeSentenceAudio(WebSocketSession session, String sentence) throws Exception {
+        if (!session.isOpen() || sentence == null || sentence.isBlank()) {
+            return 0;
+        }
+        if (textToSpeechPort instanceof ReactiveVoiceServiceClient reactiveVoiceClient) {
+            return streamRealtimeFromVoiceService(session, reactiveVoiceClient, sentence);
+        }
+        byte[] sentenceAudio = textToSpeechPort.synthesize(sentence);
+        if (sentenceAudio == null || sentenceAudio.length == 0) {
+            return 0;
+        }
+        sendAudioChunks(session, sentenceAudio);
+        return sentenceAudio.length;
+    }
+
+    private int streamRealtimeFromVoiceService(
+            WebSocketSession session,
+            ReactiveVoiceServiceClient reactiveVoiceClient,
+            String sentence) {
+        AtomicInteger sentBytes = new AtomicInteger();
+        AtomicBoolean firstChunk = new AtomicBoolean(true);
+
+        reactiveVoiceClient.synthesizeStreamChunksAsync(sentence, "en")
+                .doOnNext(chunk -> {
+                    if (chunk.length == 0 || !session.isOpen()) {
+                        return;
+                    }
+                    try {
+                        maybeDelayBeforeFirstChunk(firstChunk);
+                        session.sendMessage(new BinaryMessage(chunk));
+                        audioChunkSentCounter.increment();
+                        sentBytes.addAndGet(chunk.length);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                })
+                .blockLast(TTS_STREAM_TIMEOUT);
+
+        return sentBytes.get();
+    }
+
     private void sendAudioChunks(WebSocketSession session, byte[] audioBytes) throws Exception {
         if (audioBytes == null || audioBytes.length == 0 || !session.isOpen()) {
             return;
         }
+
+        int chunkCount = 0;
+        boolean firstChunk = true;
         for (int offset = 0; offset < audioBytes.length; offset += AUDIO_CHUNK_SIZE_BYTES) {
             int end = Math.min(audioBytes.length, offset + AUDIO_CHUNK_SIZE_BYTES);
             byte[] chunk = new byte[end - offset];
             System.arraycopy(audioBytes, offset, chunk, 0, chunk.length);
+            if (firstChunk) {
+                Thread.sleep(FIRST_AUDIO_CHUNK_DELAY_MS);
+                firstChunk = false;
+            }
             session.sendMessage(new BinaryMessage(chunk));
             audioChunkSentCounter.increment();
+            chunkCount++;
+            if (chunkCount <= 3) {
+                System.out.println("[audio-proxy] Sent chunk #" + chunkCount
+                        + ": " + chunk.length + " bytes");
+            }
+        }
+        System.out.println("[audio-proxy] Total: " + chunkCount + " chunks sent");
+    }
+
+    private void maybeDelayBeforeFirstChunk(AtomicBoolean firstChunk) throws InterruptedException {
+        if (firstChunk.compareAndSet(true, false)) {
+            Thread.sleep(FIRST_AUDIO_CHUNK_DELAY_MS);
         }
     }
 
@@ -547,11 +690,13 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
         sendEvent(session, event, message, null, null);
     }
 
-    private void sendEvent(WebSocketSession session, VoiceEventType event, String message, String code) throws Exception {
+    private void sendEvent(WebSocketSession session, VoiceEventType event, String message, String code)
+            throws Exception {
         sendEvent(session, event, message, code, null);
     }
 
-    private void sendEvent(WebSocketSession session, VoiceEventType event, String message, String code, Map<String, Object> data)
+    private void sendEvent(WebSocketSession session, VoiceEventType event, String message, String code,
+            Map<String, Object> data)
             throws Exception {
         if (!session.isOpen()) {
             return;
@@ -561,7 +706,8 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
         try {
             session.sendMessage(new TextMessage(objectMapper.writeValueAsString(payload)));
         } catch (JsonProcessingException e) {
-            session.sendMessage(new TextMessage("{\"event\":\"error\",\"message\":\"Failed to serialize voice event\"}"));
+            session.sendMessage(
+                    new TextMessage("{\"event\":\"error\",\"message\":\"Failed to serialize voice event\"}"));
         }
     }
 

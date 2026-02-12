@@ -53,6 +53,7 @@ const int _minAudioQueueTrimTargetBytes = 512 * 1024;
 const int _audioQueueHardCapBytes = 8 * 1024 * 1024;
 const int _playbackBatchTargetBytes = 48 * 1024;
 const int _playbackBatchMaxChunks = 8;
+const int _ttsNumChannels = 1;
 const int _ttsSampleRate = 24000;
 const int _pcm16BytesPerSample = 2;
 const int _maxStreamDrainFallbackMs = 90000;
@@ -182,11 +183,19 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
             final Uint8List bytes = message is Uint8List
                 ? message
                 : Uint8List.fromList(List<int>.from(message));
-            if (_expectingAudioEnd) {
-              _enqueueAudioChunk(bytes);
+            final Uint8List pcmBytes = bytes;
+            if (pcmBytes.isEmpty) {
+              return;
+            }
+            final shouldStreamPlayback =
+                _expectingAudioEnd ||
+                _streamPlaybackSessionActive ||
+                state.status == VoiceState.processing;
+            if (shouldStreamPlayback) {
+              _enqueueAudioChunk(pcmBytes);
               _drainChunkPlayback();
             } else {
-              _playAudio(bytes);
+              _playAudio(pcmBytes);
             }
           }
         },
@@ -446,6 +455,21 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
     return merged;
   }
 
+  Uint8List _stripWavHeaderIfPresent(Uint8List bytes) {
+    if (bytes.length <= 44) {
+      return bytes;
+    }
+    final isRiff =
+        bytes[0] == 0x52 && // R
+        bytes[1] == 0x49 && // I
+        bytes[2] == 0x46 && // F
+        bytes[3] == 0x46; // F
+    if (!isRiff) {
+      return bytes;
+    }
+    return Uint8List.sublistView(bytes, 44);
+  }
+
   void _enqueueAudioChunk(Uint8List chunk) {
     _audioChunkQueue.addLast(chunk);
     _queuedAudioBytes += chunk.length;
@@ -485,15 +509,25 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
     if (_streamPlaybackSessionActive) {
       return;
     }
-    await _player!.startPlayerFromStream(
-      codec: Codec.pcm16,
-      interleaved: true,
-      numChannels: 1,
-      sampleRate: _ttsSampleRate,
-      bufferSize: 8192,
-      onBufferUnderflow: _onStreamingUnderflow,
-    );
-    _streamPlaybackSessionActive = true;
+    try {
+      await _player!.startPlayerFromStream(
+        // Keep stream settings in sync with backend WAV stream.
+        codec: Codec.pcm16WAV,
+        interleaved: true,
+        numChannels: _ttsNumChannels,
+        sampleRate: _ttsSampleRate,
+        bufferSize: 8192,
+        onBufferUnderflow: _onStreamingUnderflow,
+      );
+      _streamPlaybackSessionActive = true;
+    } catch (e) {
+      _streamPlaybackSessionActive = false;
+      _transitionStatus(
+        VoiceState.error,
+        errorMessage: "Audio stream start failed: $e",
+      );
+      rethrow;
+    }
   }
 
   void _onStreamingUnderflow() {
