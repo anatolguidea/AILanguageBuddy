@@ -10,6 +10,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,11 +21,13 @@ import java.util.List;
 import java.util.Collections;
 import java.util.UUID;
 import java.time.LocalDateTime;
+import java.util.stream.Collectors;
 
 @Service
 public class ChatService {
 
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
+    private static final int PROMPT_HISTORY_LIMIT = 10;
 
     private final ChatModel chatModel;
     private final ChatMessageRepository repository;
@@ -46,14 +49,20 @@ public class ChatService {
      * Returns a structured result that includes corrections and vocabulary when
      * available.
      */
+    @Transactional
     public AiTutorResult askLanguageCoach(String userMessage, UUID userId, LearningContext context) {
-        var systemInstructions = new SystemMessage(promptBuilder.buildSystemPrompt(context));
-        var userMsg = new UserMessage(userMessage);
-        Prompt prompt = new Prompt(List.of(systemInstructions, userMsg));
-
         try {
-            // Save user message with mode
-            repository.save(new ChatMessage(userMessage, "user", userId, context.mode()));
+            String mode = (context != null && context.mode() != null && !context.mode().isBlank())
+                    ? context.mode()
+                    : "general";
+            String historyBlock = buildHistoryBlockForPrompt(userId, mode, PROMPT_HISTORY_LIMIT);
+            var systemInstructions = new SystemMessage(
+                    promptBuilder.buildSystemPrompt(context, historyBlock, userMessage));
+            var userMsg = new UserMessage(userMessage);
+            Prompt prompt = new Prompt(List.of(systemInstructions, userMsg));
+
+            // Save user message with mode and flush immediately.
+            repository.saveAndFlush(new ChatMessage(userMessage, "user", userId, mode));
 
             String rawResponse = chatModel.call(prompt)
                     .getResult()
@@ -62,13 +71,32 @@ public class ChatService {
 
             AiTutorResult result = parseTutorResult(rawResponse);
 
-            // Persist what the user actually sees in the chat bubble.
-            // Save assistant message with mode
-            repository.save(new ChatMessage(result.replyText(), "assistant", userId, context.mode()));
+            // Persist what the user actually sees in the chat bubble, flush immediately.
+            repository.saveAndFlush(new ChatMessage(result.replyText(), "assistant", userId, mode));
             return result;
         } catch (Exception e) {
             throw new RuntimeException("AI request failed", e);
         }
+    }
+
+    private String buildHistoryBlockForPrompt(UUID userId, String mode, int limit) {
+        if (userId == null) {
+            return "";
+        }
+        String safeMode = mode == null || mode.isBlank() ? "general" : mode;
+        List<ChatMessage> history = repository.findByUserIdAndModeOrderByCreatedAtDesc(
+                userId,
+                safeMode,
+                PageRequest.of(0, limit));
+        if (history.isEmpty()) {
+            return "";
+        }
+        Collections.reverse(history);
+        return history.stream()
+                .map(msg -> "%s: %s".formatted(
+                        msg.getRole() == null ? "unknown" : msg.getRole(),
+                        msg.getContent() == null ? "" : msg.getContent().replace('\n', ' ').trim()))
+                .collect(Collectors.joining("\n"));
     }
 
     public List<ChatMessage> loadHistory(UUID userId, int limit) {

@@ -29,7 +29,7 @@ public class ChatMessage {
     @Column(columnDefinition = "uuid", name = "user_id")
     private UUID userId;
 
-    @Column(name = "mode")
+    @Column(name = "mode", nullable = false, length = 50)
     private String mode = "general";
 
     public ChatMessage() {

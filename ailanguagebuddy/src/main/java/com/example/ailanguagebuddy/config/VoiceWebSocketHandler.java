@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
+    private static final String VOICE_LIVE_MODE = "VOICE_LIVE";
 
     private final VoiceServiceClient voiceService;
     private final ChatService chatService;
@@ -117,7 +118,7 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
                 return;
             }
 
-            LearningContext context = new LearningContext("English", "A1", "General Conversation", "General");
+            LearningContext context = new LearningContext("English", "A1", "General Conversation", VOICE_LIVE_MODE);
             AiTutorResult aiResult = chatService.askLanguageCoach(transcribedText, userId, context);
             String aiReply = aiResult.replyText();
             System.out.println("AI Reply: " + aiReply);

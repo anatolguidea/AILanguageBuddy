@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 import torch
 import torchaudio
@@ -7,6 +7,7 @@ import io
 import os
 import uvicorn
 import numpy as np
+import audioop
 from contextlib import asynccontextmanager
 
 # Initialize API
@@ -14,7 +15,11 @@ app = FastAPI(title="Voice Service using Chatterbox")
 
 # Global model variable
 tts_model = None
-MODEL_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+# Force Apple Silicon acceleration path.
+MODEL_DEVICE = "mps"
+STREAM_CHUNK_BYTES = 8 * 1024
+STT_MODEL_REPO = os.getenv("MLX_WHISPER_MODEL", "mlx-community/whisper-tiny")
+SILENCE_RMS_THRESHOLD = 220
 
 # Mock Class
 class MockTTS:
@@ -50,19 +55,21 @@ async def lifespan(app: FastAPI):
         from chatterbox.tts_turbo import ChatterboxTurboTTS
         tts_model = ChatterboxTurboTTS.from_pretrained(device=MODEL_DEVICE)
         print("Chatterbox-Turbo loaded successfully.")
+        # Warmup to avoid cold-start penalty on first real request.
+        with torch.inference_mode(), torch.no_grad():
+            _ = tts_model.generate("System ready.")
+        print("Chatterbox-Turbo warmup complete.")
     except Exception as e:
         print(f"Failed to load Chatterbox model: {e}")
         print("Running in MOCK mode for TTS.")
         tts_model = MockTTS()
 
-    # Load STT model (Whisper)
-    print(f"Loading Faster-Whisper (tiny) on {MODEL_DEVICE}...")
+    # Load STT model (Whisper via MLX on Apple Silicon)
+    print(f"Loading mlx-whisper ({STT_MODEL_REPO}) on {MODEL_DEVICE}...")
     try:
-        from faster_whisper import WhisperModel
-        # Use 'tiny' or 'base' for speed. 'int8' is faster on CPU.
-        stt_compute_type = "int8" if MODEL_DEVICE == "cpu" else "float16"
-        stt_model = WhisperModel("tiny", device=MODEL_DEVICE, compute_type=stt_compute_type)
-        print("Faster-Whisper loaded successfully.")
+        import mlx_whisper
+        stt_model = mlx_whisper
+        print("mlx-whisper loaded successfully.")
     except Exception as e:
         print(f"Failed to load Whisper model: {e}")
         stt_model = None
@@ -101,6 +108,35 @@ logger = logging.getLogger(__name__)
 
 # ... (imports)
 
+def _wav_bytes_to_float32(wav_bytes: io.BytesIO) -> np.ndarray:
+    """Decode WAV bytes to mono float32 @16k for mlx-whisper."""
+    with wave.open(wav_bytes, "rb") as wf:
+        channels = wf.getnchannels()
+        sampwidth = wf.getsampwidth()
+        rate = wf.getframerate()
+        raw = wf.readframes(wf.getnframes())
+
+    if sampwidth == 2:
+        samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+    elif sampwidth == 4:
+        samples = np.frombuffer(raw, dtype=np.int32).astype(np.float32) / 2147483648.0
+    else:
+        raise ValueError(f"Unsupported WAV sample width: {sampwidth}")
+
+    if channels > 1:
+        samples = samples.reshape(-1, channels).mean(axis=1)
+
+    if rate != 16000:
+        duration = len(samples) / float(rate)
+        target_len = max(1, int(duration * 16000))
+        samples = np.interp(
+            np.linspace(0, len(samples) - 1, target_len),
+            np.arange(len(samples)),
+            samples,
+        ).astype(np.float32)
+
+    return samples
+
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
     """
@@ -135,10 +171,28 @@ async def transcribe(file: UploadFile = File(...)):
                 logger.error(f"Failed to wrap PCM data: {e}")
                 raise HTTPException(status_code=400, detail=f"Failed to wrap PCM: {e}")
 
-        # Transcribe
-        segments, info = stt_model.transcribe(audio_data, beam_size=5)
-        
-        transcribed_text = " ".join([segment.text for segment in segments]).strip()
+        # Strict silence gate to avoid noise hallucinations.
+        try:
+            if contents.startswith(b"RIFF"):
+                with wave.open(io.BytesIO(contents), "rb") as wf:
+                    rms = audioop.rms(wf.readframes(wf.getnframes()), wf.getsampwidth())
+            else:
+                rms = audioop.rms(contents, 2)
+            if rms < SILENCE_RMS_THRESHOLD:
+                logger.info(f"Silence detected (rms={rms} < {SILENCE_RMS_THRESHOLD}), skipping STT.")
+                return {"text": ""}
+        except Exception as e:
+            logger.warning(f"Silence gate failed, continuing STT: {e}")
+
+        # Transcribe with mlx-whisper, language locked to English.
+        audio_np = _wav_bytes_to_float32(audio_data)
+        result = stt_model.transcribe(
+            audio_np,
+            path_or_hf_repo=STT_MODEL_REPO,
+            language="en",
+        )
+
+        transcribed_text = (result.get("text", "") if isinstance(result, dict) else str(result)).strip()
         logger.info(f"Transcription success: '{transcribed_text}'")
         
         return {"text": transcribed_text}
@@ -156,7 +210,8 @@ def synthesize_raw(request: SpeakRequest):
     
     try:
         logger.info(f"Synthesizing text: '{request.text}'")
-        wav = tts_model.generate(request.text)
+        with torch.inference_mode(), torch.no_grad():
+            wav = tts_model.generate(request.text)
         
         # Ensure tensor is on CPU
         if hasattr(wav, 'cpu'):
@@ -175,10 +230,23 @@ def synthesize_raw(request: SpeakRequest):
         # Normalize/Clip and Convert to Int16
         # Chatterbox usually outputs float32 in [-1, 1]
         wav_int16 = (np.clip(wav_numpy, -1, 1) * 32767).astype(np.int16)
-        
-        logger.info(f"Generated audio bytes: {len(wav_int16.tobytes())}")
-        
-        return Response(content=wav_int16.tobytes(), media_type="application/octet-stream")
+        audio_bytes = wav_int16.tobytes()
+
+        logger.info(f"Generated audio bytes: {len(audio_bytes)}")
+
+        def iter_audio_chunks():
+            try:
+                for offset in range(0, len(audio_bytes), STREAM_CHUNK_BYTES):
+                    yield audio_bytes[offset:offset + STREAM_CHUNK_BYTES]
+            finally:
+                # Thermal management: clear MPS cache only after synthesis stream completes.
+                if hasattr(torch, "mps") and hasattr(torch.mps, "empty_cache"):
+                    torch.mps.empty_cache()
+
+        return StreamingResponse(
+            iter_audio_chunks(),
+            media_type="application/octet-stream",
+        )
         
     except Exception as e:
         logger.error(f"Synthesis error: {e}")
