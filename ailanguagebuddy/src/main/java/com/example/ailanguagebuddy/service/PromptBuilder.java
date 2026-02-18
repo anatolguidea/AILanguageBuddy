@@ -17,7 +17,8 @@ public class PromptBuilder {
     String level = orDefault(effective.level(), "B1");
     String mode = orDefault(effective.mode(), "general");
     com.example.ailanguagebuddy.domain.Scenario scenario = com.example.ailanguagebuddy.domain.Scenario.fromId(mode);
-    String safeHistory = (historyFromSupabase == null || historyFromSupabase.isBlank()) ? "(no prior history)" : historyFromSupabase;
+    String safeHistory = (historyFromSupabase == null || historyFromSupabase.isBlank()) ? "(no prior history)"
+        : historyFromSupabase;
     String safeCurrent = (currentMessage == null || currentMessage.isBlank()) ? "(empty input)" : currentMessage;
     String liveVoiceInstruction = "VOICE_LIVE".equalsIgnoreCase(mode)
         ? "You are currently in LIVE VOICE mode. Your context is limited to the current vocal exchange."
@@ -41,30 +42,12 @@ public class PromptBuilder {
         Instructions:
         - %s
         - Use the history to resolve pronouns like "it", "that", or "them".
-        - Keep the response under 15 words to maintain low latency for TTS.
-        - If the user corrects you, acknowledge it and continue the lesson.
-        - Correct grammar, vocabulary and naturalness.
-        - Keep the reply in the target language unless explicitly asked otherwise.
-        - Explain corrections briefly and clearly, in the learner's native language when helpful.
-
-        Respond ONLY with valid JSON (no markdown, no extra text) with this shape:
-        {
-          "replyText": "your corrected answer and guidance in the target language",
-          "corrections": [
-            {
-              "original": "the learner's original fragment",
-              "corrected": "the improved version",
-              "explanation": "short explanation of what changed and why"
-            }
-          ],
-          "vocabulary": [
-            {
-              "term": "useful word or expression",
-              "translation": "short translation in the learner's native language",
-              "note": "optional nuance or usage note"
-            }
-          ]
-        }
+        - Keep the response SHORT and SPOKEN (max 20 words).
+        - Use simple language suitable for a beginner/intermediate learner.
+        - If the user corrects you, acknowledge it and continue.
+        - Respond ONLY with the spoken reply in the target language.
+        - Do NOT help with grammar or vocabulary lists.
+        - Do NOT use JSON. Just plain text.
         """.formatted(safeHistory, safeCurrent, target, nativeLang, level, scenario.getTitle(), liveVoiceInstruction);
   }
 

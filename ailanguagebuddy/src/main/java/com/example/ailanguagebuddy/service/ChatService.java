@@ -129,28 +129,34 @@ public class ChatService {
         if (raw == null || raw.isBlank()) {
             return new AiTutorResult("No reply received from AI.", List.of(), List.of());
         }
-        try {
-            var node = objectMapper.readTree(raw);
-            if (node.isObject()) {
-                var replyText = node.path("replyText").asText(raw);
 
-                var correctionsNode = node.path("corrections");
-                List<com.example.ailanguagebuddy.domain.Correction> corrections = correctionsNode.isArray()
-                        ? objectMapper.readerForListOf(com.example.ailanguagebuddy.domain.Correction.class)
-                                .readValue(correctionsNode)
-                        : List.of();
+        String trimmed = raw.trim();
+        // Only attempt to parse as JSON if it looks like a JSON object
+        if (trimmed.startsWith("{")) {
+            try {
+                var node = objectMapper.readTree(raw);
+                if (node.isObject()) {
+                    var replyText = node.path("replyText").asText(raw);
 
-                var vocabNode = node.path("vocabulary");
-                List<com.example.ailanguagebuddy.domain.VocabularyItem> vocabulary = vocabNode.isArray()
-                        ? objectMapper.readerForListOf(com.example.ailanguagebuddy.domain.VocabularyItem.class)
-                                .readValue(vocabNode)
-                        : List.of();
+                    var correctionsNode = node.path("corrections");
+                    List<com.example.ailanguagebuddy.domain.Correction> corrections = correctionsNode.isArray()
+                            ? objectMapper.readerForListOf(com.example.ailanguagebuddy.domain.Correction.class)
+                                    .readValue(correctionsNode)
+                            : List.of();
 
-                return new AiTutorResult(replyText, corrections, vocabulary);
+                    var vocabNode = node.path("vocabulary");
+                    List<com.example.ailanguagebuddy.domain.VocabularyItem> vocabulary = vocabNode.isArray()
+                            ? objectMapper.readerForListOf(com.example.ailanguagebuddy.domain.VocabularyItem.class)
+                                    .readValue(vocabNode)
+                            : List.of();
+
+                    return new AiTutorResult(replyText, corrections, vocabulary);
+                }
+            } catch (Exception ex) {
+                log.warn("Failed to parse AI JSON, falling back to raw text: {}", ex.getMessage());
             }
-        } catch (Exception ex) {
-            log.warn("Failed to parse AI JSON, falling back to raw text: {}", ex.getMessage());
         }
+
         // Fallback: treat the whole response as plain text.
         return new AiTutorResult(raw, List.of(), List.of());
     }
