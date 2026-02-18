@@ -39,6 +39,9 @@ public class Lesson {
     @Column(name = "order_index")
     private Integer orderIndex;
 
+    @Column(name = "theme_key", length = 50)
+    private String themeKey;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

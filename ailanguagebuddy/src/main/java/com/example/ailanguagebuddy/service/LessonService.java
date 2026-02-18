@@ -3,6 +3,7 @@ package com.example.ailanguagebuddy.service;
 import com.example.ailanguagebuddy.api.dto.LessonDto;
 import com.example.ailanguagebuddy.model.Lesson;
 import com.example.ailanguagebuddy.model.UserLessonProgress;
+import com.example.ailanguagebuddy.repository.LexemeRepository;
 import com.example.ailanguagebuddy.repository.LessonRepository;
 import com.example.ailanguagebuddy.repository.UserLessonProgressRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -22,14 +23,17 @@ public class LessonService {
 
         private final LessonRepository lessonRepository;
         private final UserLessonProgressRepository progressRepository;
+        private final LexemeRepository lexemeRepository;
         private final JdbcTemplate jdbcTemplate;
 
         public LessonService(
                         LessonRepository lessonRepository,
                         UserLessonProgressRepository progressRepository,
+                        LexemeRepository lexemeRepository,
                         JdbcTemplate jdbcTemplate) {
                 this.lessonRepository = lessonRepository;
                 this.progressRepository = progressRepository;
+                this.lexemeRepository = lexemeRepository;
                 this.jdbcTemplate = jdbcTemplate;
         }
 
@@ -73,7 +77,7 @@ public class LessonService {
                                         lesson.getDescription(),
                                         status,
                                         enrichWithInteractiveCards(lesson.getContentJson(), lesson.getOrderIndex(),
-                                                        resolvedLanguage),
+                                                        resolvedLanguage, lesson.getThemeKey()),
                                         lesson.getOrderIndex() != null ? lesson.getOrderIndex() : 0));
                 }
 
@@ -100,7 +104,7 @@ public class LessonService {
         }
 
         private Map<String, Object> enrichWithInteractiveCards(Map<String, Object> original, Integer orderIndex,
-                        String targetLanguage) {
+                        String targetLanguage, String themeKey) {
                 Map<String, Object> content = new LinkedHashMap<>();
                 if (original != null) {
                         content.putAll(original);
@@ -112,28 +116,27 @@ public class LessonService {
                         return content;
                 }
 
-                // Otherwise generate dynamic content based on Lexemes
-                List<Lexeme> lexemes = lexemesForLanguage(targetLanguage);
+                // Production: prefer lexemes from DB when lesson has a theme_key.
+                List<LexemeData> lexemes = null;
+                if (themeKey != null && !themeKey.isBlank()) {
+                        lexemes = lexemesFromDb(targetLanguage, themeKey);
+                }
+                // Fallback: in-memory lexemes for non-DB-backed languages.
+                if (lexemes == null || lexemes.isEmpty()) {
+                        lexemes = lexemesForLanguage(targetLanguage);
+                }
                 if (lexemes.isEmpty())
                         return content;
 
                 int seedIndex = Math.max(0, ((orderIndex == null ? 1 : orderIndex) - 1) % lexemes.size());
 
-                // Select a focus word and some distractors
-                Lexeme focus = lexemes.get(seedIndex);
-                Lexeme distractorA = lexemes.get((seedIndex + 1) % lexemes.size());
-                Lexeme distractorB = lexemes.get((seedIndex + 2) % lexemes.size());
-                Lexeme distractorC = lexemes.get((seedIndex + 3) % lexemes.size());
+                LexemeData focus = lexemes.get(seedIndex);
+                LexemeData distractorA = lexemes.get((seedIndex + 1) % lexemes.size());
+                LexemeData distractorB = lexemes.get((seedIndex + 2) % lexemes.size());
 
                 List<Map<String, Object>> challenges = new ArrayList<>();
-
-                // 1. IMAGE_CHOICE (now Emoji based): 3 emojis with labels, one correct
                 challenges.add(imageChoiceCard(focus, distractorA, distractorB));
-
-                // 2. TRANSLATE_PICKER: A sentence with a word bank (Choice chip style)
                 challenges.add(translatePickerCard(focus, distractorA, distractorB));
-
-                // 3. SENTENCE_BUILDER: Reorder words to translate a phrase
                 challenges.add(sentenceBuilderCard(focus, distractorA));
 
                 content.put("source_language", "en");
@@ -142,10 +145,25 @@ public class LessonService {
                 return content;
         }
 
+        /** Load lexemes from DB for (language, theme). Returns empty list if none. */
+        private List<LexemeData> lexemesFromDb(String languageCode, String themeKey) {
+                List<com.example.ailanguagebuddy.model.Lexeme> entities = lexemeRepository
+                                .findByLanguageCodeAndThemeKeyOrderBySortOrderAsc(languageCode, themeKey);
+                return entities.stream()
+                                .map(e -> new LexemeData(
+                                                e.getEnglishWord(),
+                                                e.getEnglishPhrase(),
+                                                e.getTargetWord(),
+                                                e.getTargetPhrase(),
+                                                e.getCorrectOrder() != null ? e.getCorrectOrder() : List.of(),
+                                                e.getEmoji()))
+                                .toList();
+        }
+
         /**
          * IMAGE_CHOICE: 3 options with Emojis, one correct.
          */
-        private Map<String, Object> imageChoiceCard(Lexeme focus, Lexeme a, Lexeme b) {
+        private Map<String, Object> imageChoiceCard(LexemeData focus, LexemeData a, LexemeData b) {
                 List<Map<String, Object>> options = new ArrayList<>();
                 options.add(optionWithEmoji(focus.targetWord, true, focus.emoji));
                 options.add(optionWithEmoji(a.targetWord, false, a.emoji));
@@ -170,7 +188,7 @@ public class LessonService {
         /**
          * TRANSLATE_PICKER: A sentence with a word bank (Multiple choice / Chips).
          */
-        private Map<String, Object> translatePickerCard(Lexeme focus, Lexeme a, Lexeme b) {
+        private Map<String, Object> translatePickerCard(LexemeData focus, LexemeData a, LexemeData b) {
                 List<String> options = new ArrayList<>();
                 options.add(a.targetWord);
                 options.add(focus.targetWord);
@@ -188,7 +206,7 @@ public class LessonService {
         /**
          * SENTENCE_BUILDER: Reorder words to translate a phrase.
          */
-        private Map<String, Object> sentenceBuilderCard(Lexeme focus, Lexeme distractor) {
+        private Map<String, Object> sentenceBuilderCard(LexemeData focus, LexemeData distractor) {
                 List<String> wordBank = new ArrayList<>(focus.correctOrder);
                 // Add some distractors to the bank
                 wordBank.add(distractor.targetWord.split(" ")[0]);
@@ -204,60 +222,55 @@ public class LessonService {
                 return card;
         }
 
-        private List<Lexeme> lexemesForLanguage(String languageCode) {
-                String lang = languageCode == null ? "es" : languageCode.toLowerCase();
+        /**
+         * Small in-memory fallback vocabulary for non-Spanish languages.
+         * Spanish content now lives in the database via the lexemes table.
+         */
+        private List<LexemeData> lexemesForLanguage(String languageCode) {
+                String lang = languageCode == null ? "" : languageCode.toLowerCase();
 
-                // Expanded language support with basic vocabulary and Emojis
                 return switch (lang) {
                         case "fr" -> List.of(
-                                        new Lexeme("coffee", "I would like a coffee", "un café", "Je voudrais un café",
+                                        new LexemeData("coffee", "I would like a coffee", "un café", "Je voudrais un café",
                                                         List.of("Je", "voudrais", "un", "café"), "☕"),
-                                        new Lexeme("tea", "One tea please", "un thé", "Un thé s'il vous plaît",
+                                        new LexemeData("tea", "One tea please", "un thé", "Un thé s'il vous plaît",
                                                         List.of("Un", "thé", "s'il", "vous", "plaît"), "🍵"),
-                                        new Lexeme("water", "Some water", "de l'eau", "De l'eau",
+                                        new LexemeData("water", "Some water", "de l'eau", "De l'eau",
                                                         List.of("De", "l'eau"), "💧"),
-                                        new Lexeme("bread", "I eat bread", "du pain", "Je mange du pain",
+                                        new LexemeData("bread", "I eat bread", "du pain", "Je mange du pain",
                                                         List.of("Je", "mange", "du", "pain"), "🍞"));
                         case "de" -> List.of(
-                                        new Lexeme("coffee", "I drink coffee", "ein Kaffee", "Ich trinke Kaffee",
+                                        new LexemeData("coffee", "I drink coffee", "ein Kaffee", "Ich trinke Kaffee",
                                                         List.of("Ich", "trinke", "Kaffee"), "☕"),
-                                        new Lexeme("tea", "A tea please", "ein Tee", "Einen Tee bitte",
+                                        new LexemeData("tea", "A tea please", "ein Tee", "Einen Tee bitte",
                                                         List.of("Einen", "Tee", "bitte"), "🍵"),
-                                        new Lexeme("water", "I need water", "Wasser", "Ich brauche Wasser",
+                                        new LexemeData("water", "I need water", "Wasser", "Ich brauche Wasser",
                                                         List.of("Ich", "brauche", "Wasser"), "💧"),
-                                        new Lexeme("bread", "The bread is good", "Brot", "Das Brot ist gut",
+                                        new LexemeData("bread", "The bread is good", "Brot", "Das Brot ist gut",
                                                         List.of("Das", "Brot", "ist", "gut"), "🍞"));
                         case "it" -> List.of(
-                                        new Lexeme("coffee", "A coffee please", "un caffè", "Un caffè per favore",
+                                        new LexemeData("coffee", "A coffee please", "un caffè", "Un caffè per favore",
                                                         List.of("Un", "caffè", "per", "favore"), "☕"),
-                                        new Lexeme("tea", "I like tea", "un tè", "Mi piace il tè",
+                                        new LexemeData("tea", "I like tea", "un tè", "Mi piace il tè",
                                                         List.of("Mi", "piace", "il", "tè"), "🍵"),
-                                        new Lexeme("pizza", "I want pizza", "una pizza", "Voglio una pizza",
+                                        new LexemeData("pizza", "I want pizza", "una pizza", "Voglio una pizza",
                                                         List.of("Voglio", "una", "pizza"), "🍕"),
-                                        new Lexeme("bread", "The bread is fresh", "il pane", "Il pane è fresco",
+                                        new LexemeData("bread", "The bread is fresh", "il pane", "Il pane è fresco",
                                                         List.of("Il", "pane", "è", "fresco"), "🍞"));
                         case "pt" -> List.of(
-                                        new Lexeme("coffee", "I drink coffee", "um café", "Eu bebo café",
+                                        new LexemeData("coffee", "I drink coffee", "um café", "Eu bebo café",
                                                         List.of("Eu", "bebo", "café"), "☕"),
-                                        new Lexeme("tea", "A tea please", "um chá", "Um chá por favor",
+                                        new LexemeData("tea", "A tea please", "um chá", "Um chá por favor",
                                                         List.of("Um", "chá", "por", "favor"), "🍵"),
-                                        new Lexeme("water", "I want water", "água", "Eu quero água",
+                                        new LexemeData("water", "I want water", "água", "Eu quero água",
                                                         List.of("Eu", "quero", "água"), "💧"),
-                                        new Lexeme("bread", "Bread with butter", "pão", "Pão com manteiga",
+                                        new LexemeData("bread", "Bread with butter", "pão", "Pão com manteiga",
                                                         List.of("Pão", "com", "manteiga"), "🍞"));
-                        // Default to Spanish
-                        default -> List.of(
-                                        new Lexeme("coffee", "I want a coffee", "un café", "Yo quiero un café",
-                                                        List.of("Yo", "quiero", "un", "café"), "☕"),
-                                        new Lexeme("tea", "Review the tea", "un té", "Revisa el té",
-                                                        List.of("Revisa", "el", "té"), "🍵"),
-                                        new Lexeme("water", "I drink water", "agua", "Yo bebo agua",
-                                                        List.of("Yo", "bebo", "agua"), "💧"),
-                                        new Lexeme("bread", "The bread", "pan", "El pan", List.of("El", "pan"), "🍞"));
+                        default -> List.of(); // for 'es' and any other languages we now expect DB-backed lexemes
                 };
         }
 
-        private record Lexeme(
+        private record LexemeData(
                         String englishWord,
                         String englishPhrase,
                         String targetWord,
