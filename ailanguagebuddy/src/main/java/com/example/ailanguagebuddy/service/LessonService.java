@@ -26,6 +26,14 @@ public class LessonService {
         private final LexemeRepository lexemeRepository;
         private final JdbcTemplate jdbcTemplate;
 
+        // Keep in sync with lesson seeders (orderIndex 1..30).
+        private static final String[] THEME_KEYS = {
+                        "greetings", "numbers", "colors", "family", "food", "cafe", "days_weather", "shop", "routine",
+                        "body", "restaurant", "transport", "hotel", "hobbies", "work", "interview", "doctor", "bank",
+                        "tech", "opinions", "advice", "past", "future", "comparisons", "conditional", "kitchen", "culture",
+                        "news", "review", "review"
+        };
+
         public LessonService(
                         LessonRepository lessonRepository,
                         UserLessonProgressRepository progressRepository,
@@ -116,14 +124,22 @@ public class LessonService {
                         return content;
                 }
 
-                // Production: prefer lexemes from DB when lesson has a theme_key.
-                List<LexemeData> lexemes = null;
-                if (themeKey != null && !themeKey.isBlank()) {
-                        lexemes = lexemesFromDb(targetLanguage, themeKey);
+                // Production: load lexemes from DB by (language, theme).
+                String resolvedTheme = themeKey;
+                if (resolvedTheme == null || resolvedTheme.isBlank()) {
+                        int idx = (orderIndex == null ? 1 : orderIndex) - 1;
+                        if (idx >= 0 && idx < THEME_KEYS.length) {
+                                resolvedTheme = THEME_KEYS[idx];
+                        }
                 }
-                // Fallback: in-memory lexemes for non-DB-backed languages.
-                if (lexemes == null || lexemes.isEmpty()) {
-                        lexemes = lexemesForLanguage(targetLanguage);
+
+                List<LexemeData> lexemes = (resolvedTheme == null || resolvedTheme.isBlank())
+                                ? List.of()
+                                : lexemesFromDb(targetLanguage, resolvedTheme);
+
+                // If theme has no lexemes, fall back to review theme (still DB-backed).
+                if (lexemes.isEmpty() && !"review".equalsIgnoreCase(resolvedTheme)) {
+                        lexemes = lexemesFromDb(targetLanguage, "review");
                 }
                 if (lexemes.isEmpty())
                         return content;
@@ -220,54 +236,6 @@ public class LessonService {
                 card.put("word_bank", wordBank);
                 card.put("correct_order", focus.correctOrder);
                 return card;
-        }
-
-        /**
-         * Small in-memory fallback vocabulary for non-Spanish languages.
-         * Spanish content now lives in the database via the lexemes table.
-         */
-        private List<LexemeData> lexemesForLanguage(String languageCode) {
-                String lang = languageCode == null ? "" : languageCode.toLowerCase();
-
-                return switch (lang) {
-                        case "fr" -> List.of(
-                                        new LexemeData("coffee", "I would like a coffee", "un café", "Je voudrais un café",
-                                                        List.of("Je", "voudrais", "un", "café"), "☕"),
-                                        new LexemeData("tea", "One tea please", "un thé", "Un thé s'il vous plaît",
-                                                        List.of("Un", "thé", "s'il", "vous", "plaît"), "🍵"),
-                                        new LexemeData("water", "Some water", "de l'eau", "De l'eau",
-                                                        List.of("De", "l'eau"), "💧"),
-                                        new LexemeData("bread", "I eat bread", "du pain", "Je mange du pain",
-                                                        List.of("Je", "mange", "du", "pain"), "🍞"));
-                        case "de" -> List.of(
-                                        new LexemeData("coffee", "I drink coffee", "ein Kaffee", "Ich trinke Kaffee",
-                                                        List.of("Ich", "trinke", "Kaffee"), "☕"),
-                                        new LexemeData("tea", "A tea please", "ein Tee", "Einen Tee bitte",
-                                                        List.of("Einen", "Tee", "bitte"), "🍵"),
-                                        new LexemeData("water", "I need water", "Wasser", "Ich brauche Wasser",
-                                                        List.of("Ich", "brauche", "Wasser"), "💧"),
-                                        new LexemeData("bread", "The bread is good", "Brot", "Das Brot ist gut",
-                                                        List.of("Das", "Brot", "ist", "gut"), "🍞"));
-                        case "it" -> List.of(
-                                        new LexemeData("coffee", "A coffee please", "un caffè", "Un caffè per favore",
-                                                        List.of("Un", "caffè", "per", "favore"), "☕"),
-                                        new LexemeData("tea", "I like tea", "un tè", "Mi piace il tè",
-                                                        List.of("Mi", "piace", "il", "tè"), "🍵"),
-                                        new LexemeData("pizza", "I want pizza", "una pizza", "Voglio una pizza",
-                                                        List.of("Voglio", "una", "pizza"), "🍕"),
-                                        new LexemeData("bread", "The bread is fresh", "il pane", "Il pane è fresco",
-                                                        List.of("Il", "pane", "è", "fresco"), "🍞"));
-                        case "pt" -> List.of(
-                                        new LexemeData("coffee", "I drink coffee", "um café", "Eu bebo café",
-                                                        List.of("Eu", "bebo", "café"), "☕"),
-                                        new LexemeData("tea", "A tea please", "um chá", "Um chá por favor",
-                                                        List.of("Um", "chá", "por", "favor"), "🍵"),
-                                        new LexemeData("water", "I want water", "água", "Eu quero água",
-                                                        List.of("Eu", "quero", "água"), "💧"),
-                                        new LexemeData("bread", "Bread with butter", "pão", "Pão com manteiga",
-                                                        List.of("Pão", "com", "manteiga"), "🍞"));
-                        default -> List.of(); // for 'es' and any other languages we now expect DB-backed lexemes
-                };
         }
 
         private record LexemeData(

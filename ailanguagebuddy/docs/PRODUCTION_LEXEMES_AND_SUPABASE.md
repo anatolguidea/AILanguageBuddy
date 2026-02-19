@@ -11,10 +11,10 @@ When you start the backend:
    - No manual step in Supabase is required for the schema.
 
 2. **Seeders** (if needed):
-   - **SpanishLessonSeeder**: If Spanish lessons count ≠ 30, it replaces all Spanish lessons with the canonical 30 and sets each lesson’s `theme_key` (e.g. `greetings`, `numbers`, `food`).
-   - **LexemeSeeder**: If there are no Spanish lexemes, it inserts the initial vocabulary per theme.
+   - **LessonSeeder**: For each supported language, if lesson count ≠ 30, it replaces that language’s lessons with the canonical 30 and sets each lesson’s `theme_key` (e.g. `greetings`, `numbers`, `food`).
+   - **LexemeSeeder**: If there are no lexemes for a language, it inserts the initial vocabulary per theme for that language.
 
-So for a **new** or **empty** DB: start the app once; Flyway creates tables and the seeders fill Spanish lessons + lexemes.
+So for a **new** or **empty** DB: start the app once; Flyway creates tables and the seeders fill lessons (all languages) + lexemes.
 
 ## What you need to do in Supabase
 

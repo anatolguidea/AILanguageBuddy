@@ -11,6 +11,7 @@ import audioop
 from contextlib import asynccontextmanager
 import asyncio
 import edge_tts
+from edge_tts.exceptions import NoAudioReceived
 
 # Initialize API
 app = FastAPI(title="Voice Service using Chatterbox")
@@ -23,6 +24,7 @@ STREAM_CHUNK_BYTES = 8 * 1024
 STT_MODEL_REPO = os.getenv("MLX_WHISPER_MODEL", "mlx-community/whisper-tiny")
 SILENCE_RMS_THRESHOLD = 220
 EDGE_VOICE_BY_LANGUAGE = {
+    "en": "en-US-JennyNeural",
     "fr": "fr-FR-DeniseNeural",
     "es": "es-ES-ElviraNeural",
     "de": "de-DE-KatjaNeural",
@@ -33,6 +35,7 @@ EDGE_VOICE_BY_LANGUAGE = {
     "ja": "ja-JP-NanamiNeural",
     "ko": "ko-KR-SunHiNeural",
 }
+EDGE_FALLBACK_VOICE = "en-US-JennyNeural"
 
 # Mock Class
 class MockTTS:
@@ -266,18 +269,27 @@ def synthesize_raw(request: SpeakRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-async def _synthesize_edge_mp3(text: str, language: str) -> bytes:
-    # Default to Spanish if language not found in map, or fallback to 'en' key if you want, 
-    # but since this function is for edge, we likely want a safe valid voice.
-    # If language is unknown, let's try 'es' as a safe fallback or just pick the first one.
-    voice = EDGE_VOICE_BY_LANGUAGE.get(language, EDGE_VOICE_BY_LANGUAGE["es"])
-    
+async def _synthesize_edge_mp3(text: str, language: str, use_fallback_voice: bool = False) -> bytes:
+    # Normalize: edge_tts can fail on empty or symbol-only text
+    text = (text or "").strip()
+    if not text or not any(c.isalnum() for c in text):
+        raise ValueError("Text must contain at least one letter or digit for synthesis")
+
+    if use_fallback_voice:
+        voice = EDGE_FALLBACK_VOICE
+        logger.warning(f"edge-tts using fallback voice {voice} for language={language}")
+    else:
+        voice = EDGE_VOICE_BY_LANGUAGE.get(language, EDGE_VOICE_BY_LANGUAGE.get("es", EDGE_FALLBACK_VOICE))
+
     communicate = edge_tts.Communicate(text=text, voice=voice)
     chunks = []
     async for chunk in communicate.stream():
         if chunk.get("type") == "audio":
             chunks.append(chunk["data"])
-    return b"".join(chunks)
+    result = b"".join(chunks)
+    if not result:
+        raise NoAudioReceived("No audio chunks received from edge-tts")
+    return result
 
 @app.post("/synthesize/instant")
 def synthesize_instant(request: SpeakRequest):
@@ -289,13 +301,28 @@ def synthesize_instant(request: SpeakRequest):
     # If NOT English, use Edge-TTS
     if language != "en":
         try:
-            logger.info(f"Instant edge-tts synthesis ({language}): '{text}'")
+            logger.info(f"Instant edge-tts synthesis ({language}): '{text[:80]}{'...' if len(text) > 80 else ''}'")
             audio_mp3 = asyncio.run(_synthesize_edge_mp3(text, language))
             return Response(
                 content=audio_mp3,
                 media_type="audio/mpeg",
                 headers={"X-Audio-Codec": "mp3", "X-Audio-Sample-Rate": "24000"},
             )
+        except NoAudioReceived as e:
+            logger.warning(f"edge-tts NoAudioReceived for language={language}, retrying with fallback voice: {e}")
+            try:
+                audio_mp3 = asyncio.run(_synthesize_edge_mp3(text, language, use_fallback_voice=True))
+                return Response(
+                    content=audio_mp3,
+                    media_type="audio/mpeg",
+                    headers={"X-Audio-Codec": "mp3", "X-Audio-Sample-Rate": "24000", "X-TTS-Fallback": "true"},
+                )
+            except Exception as retry_e:
+                logger.error(f"edge-tts fallback synthesis also failed: {retry_e}")
+                traceback.print_exc()
+                raise HTTPException(status_code=503, detail="TTS temporarily unavailable for this language. Please try again.")
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             logger.error(f"edge-tts synthesis error: {e}")
             traceback.print_exc()
