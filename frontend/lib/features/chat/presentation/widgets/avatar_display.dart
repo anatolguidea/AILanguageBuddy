@@ -29,6 +29,7 @@ class AvatarDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Center(
       child: Stack(
         alignment: Alignment.center,
@@ -62,7 +63,7 @@ class AvatarDisplay extends StatelessWidget {
             height: size * 0.8,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.surfaceDark,
+              color: scheme.surface,
               border: Border.all(color: _glowColor, width: 2),
               image: const DecorationImage(
                 image: NetworkImage("https://img.freepik.com/free-psd/3d-illustration-person-with-sunglasses_23-2149436188.jpg"), // Placeholder 3D Avatar
@@ -78,7 +79,7 @@ class AvatarDisplay extends StatelessWidget {
               height: size * 0.9,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+                border: Border.all(color: scheme.onSurface.withOpacity(0.3), width: 1),
               ),
             ).animate(
               onPlay: (controller) => controller.repeat(),

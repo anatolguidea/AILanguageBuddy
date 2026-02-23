@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../theme/app_colors.dart';
+import '../../../../core/l10n/app_strings.dart';
+import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
 import '../../domain/entities/lesson.dart';
 import '../providers/lessons_provider.dart';
 import '../widgets/lessons_header.dart';
@@ -13,10 +15,12 @@ class LessonsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final locale = ref.watch(appLocaleProvider);
+    final s = AppStrings.forLocale(locale);
     final lessonsAsync = ref.watch(lessonsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundBlack,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: lessonsAsync.when(
           data: (lessons) {
@@ -25,16 +29,17 @@ class LessonsPage extends ConsumerWidget {
 
             return RefreshIndicator(
               onRefresh: () => ref.refresh(lessonsProvider.future),
-              color: AppColors.primary,
+              color: Theme.of(context).colorScheme.primary,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const LessonsHeader(
+                    LessonsHeader(
                       streakCount: 0,
-                      onUpgrade: null, // TODO: wire to upgrade/paywall
+                      upgradeLabel: s.upgrade,
+                      onUpgrade: null,
                     ),
                     const SizedBox(height: 20),
                     if (firstLesson != null) ...[
@@ -56,9 +61,9 @@ class LessonsPage extends ConsumerWidget {
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 48),
                           child: Text(
-                            'No lessons yet',
+                            s.noLessonsYet,
                             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                  color: AppColors.textSecondary,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 ),
                           ),
                         ),
@@ -103,13 +108,13 @@ class LessonsPage extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Error loading lessons',
-                    style: TextStyle(color: AppColors.error),
+                    s.errorLoadingLessons,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                   const SizedBox(height: 12),
                   TextButton(
                     onPressed: () => ref.refresh(lessonsProvider),
-                    child: const Text('Retry'),
+                    child: Text(s.retry),
                   ),
                 ],
               ),

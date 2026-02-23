@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/l10n/app_strings.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/auth_screen_layout.dart';
 import '../../../../core/widgets/auth_text_field.dart';
 import 'auth_state.dart';
 import 'forgot_password_screen.dart';
 import 'register_screen.dart';
+import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
 
 class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({super.key});
@@ -46,28 +48,30 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = _signInErrorMessage(e);
+          _error = _signInErrorMessage(e, AppStrings.forLocale(ref.read(appLocaleProvider)));
         });
       }
     }
   }
 
   /// Clearer messages for common Supabase auth errors.
-  static String _signInErrorMessage(Object e) {
+  static String _signInErrorMessage(Object e, AppStringsData s) {
     final msg = e.toString().toLowerCase();
     if (msg.contains('invalid login') || msg.contains('invalid_credentials')) {
-      return 'Invalid email or password.';
+      return s.invalidEmailOrPassword;
     }
     if (msg.contains('email not confirmed') || msg.contains('confirm')) {
-      return 'Please confirm your email first. Check your inbox (and spam) for the confirmation link from Supabase.';
+      return s.confirmEmailFirst;
     }
     return e.toString().replaceFirst('Exception: ', '');
   }
 
   @override
   Widget build(BuildContext context) {
+    final locale = ref.watch(appLocaleProvider);
+    final s = AppStrings.forLocale(locale);
     return AuthScreenLayout(
-      title: 'Sign in',
+      title: s.signIn,
       showBackButton: false,
       children: [
         const SizedBox(height: 8),
@@ -82,14 +86,14 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             children: [
               AuthTextField(
                 controller: _emailController,
-                label: 'Email',
-                hint: 'you@example.com',
+                label: s.email,
+                hint: s.youExampleCom,
                 autofillHints: const [AutofillHints.email],
               ),
               const SizedBox(height: 16),
               AuthTextField(
                 controller: _passwordController,
-                label: 'Password',
+                label: s.password,
                 hint: '••••••••',
                 obscureText: true,
                 keyboardType: TextInputType.visiblePassword,
@@ -103,18 +107,18 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
                   ),
-                  child: const Text('Forgot password?'),
+                  child: Text(s.forgotPassword),
                 ),
               ),
               const SizedBox(height: 24),
-              AppButton(label: 'Sign in', onPressed: _submit, loading: _loading),
+              AppButton(label: s.signIn, onPressed: _submit, loading: _loading),
               const SizedBox(height: 16),
               OutlinedButton.icon(
                 onPressed: () async {
                   await ref.read(authRepositoryProvider).signInWithGoogle();
                 },
                 icon: const Icon(Icons.login), 
-                label: const Text('Sign in with Google'),
+                label: Text(s.signInWithGoogle),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
@@ -127,7 +131,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const RegisterScreen()),
         ),
-        child: const Text("Don't have an account? Create one"),
+        child: Text(s.dontHaveAccount),
       ),
     );
   }

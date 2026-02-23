@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/l10n/app_strings.dart';
+import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/auth_screen_layout.dart';
 import '../../../../core/widgets/auth_text_field.dart';
@@ -46,19 +48,22 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final locale = ref.watch(appLocaleProvider);
+    final s = AppStrings.forLocale(locale);
+
     if (_sent) {
       return AuthScreenLayout(
-        title: 'Check your email',
+        title: s.checkYourEmail,
         children: [
           const SizedBox(height: 16),
           Text(
-            'We sent a password reset link to ${_emailController.text.trim()}. '
+            '${s.weSentLink} ${_emailController.text.trim()}. '
             'Open the link to set a new password.',
             style: Theme.of(context).textTheme.bodyLarge,
           ),
           const SizedBox(height: 24),
           AppButton(
-            label: 'Back to sign in',
+            label: s.backToSignIn,
             onPressed: () => Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(builder: (_) => const SignInScreen()),
               (route) => false,
@@ -68,7 +73,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       );
     }
     return AuthScreenLayout(
-      title: 'Forgot password',
+      title: s.forgotPassword,
       children: [
         const SizedBox(height: 8),
         if (_error != null) ...[
@@ -81,23 +86,23 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Enter your email and we\'ll send you a link to reset your password.',
+                s.enterEmailResetLink,
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 24),
               AuthTextField(
                 controller: _emailController,
-                label: 'Email',
-                hint: 'you@example.com',
+                label: s.email,
+                hint: s.youExampleCom,
                 validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Enter your email';
-                  if (!v.contains('@')) return 'Enter a valid email';
+                  if (v == null || v.trim().isEmpty) return s.enterYourEmail;
+                  if (!v.contains('@')) return s.enterValidEmail;
                   return null;
                 },
                 autofillHints: const [AutofillHints.email],
               ),
               const SizedBox(height: 24),
-              AppButton(label: 'Send reset link', onPressed: _submit, loading: _loading),
+              AppButton(label: s.sendResetLink, onPressed: _submit, loading: _loading),
             ],
           ),
         ),

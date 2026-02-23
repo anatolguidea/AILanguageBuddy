@@ -2,15 +2,17 @@ package com.example.ailanguagebuddy.domain;
 
 /**
  * Captures the learner's profile and current mode so prompts can be adapted.
+ * instructionLocale: when "ro", the AI should give instructions/corrections in Romanian.
  */
 public record LearningContext(
         String targetLanguage,   // e.g. "English"
         String nativeLanguage,   // e.g. "Romanian"
         String level,            // e.g. "A2", "B1", "C1"
-        String mode              // e.g. "chat", "scenario", "story"
+        String mode,             // e.g. "chat", "scenario", "story"
+        String instructionLocale // e.g. "en", "ro" – language for correction/tips text
 ) {
     public static LearningContext defaultChat() {
-        return new LearningContext("English", "Romanian", "B1", "chat");
+        return new LearningContext("English", "Romanian", "B1", "chat", "en");
     }
 }
 

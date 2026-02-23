@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../../theme/app_colors.dart';
+import '../../../../core/l10n/app_strings.dart';
+import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
 import '../../data/topic_repository.dart';
 import '../../domain/entities/custom_topic.dart';
 import '../providers/custom_topics_provider.dart';
@@ -22,11 +24,13 @@ class _PracticePageState extends ConsumerState<PracticePage> {
 
   @override
   Widget build(BuildContext context) {
+    final locale = ref.watch(appLocaleProvider);
+    final s = AppStrings.forLocale(locale);
     final topicsAsync = ref.watch(topicsProvider);
     final customTopicsAsync = ref.watch(customTopicsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundBlack,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Stack(
           children: [
@@ -35,7 +39,7 @@ class _PracticePageState extends ConsumerState<PracticePage> {
                 ref.refresh(topicsProvider.future);
                 ref.read(customTopicsProvider.notifier).load();
               },
-              color: AppColors.primary,
+              color: Theme.of(context).colorScheme.primary,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -44,6 +48,8 @@ class _PracticePageState extends ConsumerState<PracticePage> {
                   children: [
                     PracticeHeader(
                       streakCount: 0,
+                      title: s.practice,
+                      upgradeLabel: s.upgrade,
                       onUpgrade: () {
                         // TODO: Navigate to upgrade / paywall
                       },
@@ -53,13 +59,13 @@ class _PracticePageState extends ConsumerState<PracticePage> {
                     Row(
                       children: [
                         _SegmentChip(
-                          label: 'All topics',
+                          label: s.allTopics,
                           selected: _showAllTopics,
                           onTap: () => setState(() => _showAllTopics = true),
                         ),
                         const SizedBox(width: 12),
                         _SegmentChip(
-                          label: 'Custom',
+                          label: s.custom,
                           selected: !_showAllTopics,
                           onTap: () => setState(() => _showAllTopics = false),
                         ),
@@ -67,8 +73,8 @@ class _PracticePageState extends ConsumerState<PracticePage> {
                     ),
                     const SizedBox(height: 20),
                     PracticeBanner(
-                      title: "word of the day",
-                      subtitle: "Check today's",
+                      title: s.wordOfTheDay,
+                      subtitle: s.checkTodays,
                       onTap: () {
                         // TODO: Implement word of the day modal
                       },
@@ -89,16 +95,16 @@ class _PracticePageState extends ConsumerState<PracticePage> {
                             );
                           },
                         ),
-                        loading: () => const Center(
+                        loading: () => Center(
                           child: Padding(
-                            padding: EdgeInsets.all(20.0),
-                            child: CircularProgressIndicator(color: AppColors.primary),
+                            padding: const EdgeInsets.all(20.0),
+                            child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
                           ),
                         ),
                         error: (err, stack) => Center(
                           child: Text(
-                            'Error loading topics',
-                            style: TextStyle(color: AppColors.error),
+                            s.errorLoadingTopics,
+                            style: TextStyle(color: Theme.of(context).colorScheme.error),
                           ),
                         ),
                       ),
@@ -107,6 +113,8 @@ class _PracticePageState extends ConsumerState<PracticePage> {
                         data: (customTopics) {
                           if (customTopics.isEmpty) {
                             return _CustomEmptyState(
+                              message: s.noCustomTopicsYet,
+                              addLabel: s.createTopic,
                               onAddTap: () => context.push('/practice/custom/create'),
                             );
                           }
@@ -118,7 +126,7 @@ class _PracticePageState extends ConsumerState<PracticePage> {
                                 child: TextButton.icon(
                                   onPressed: () => context.push('/practice/custom/create'),
                                   icon: const Icon(Icons.add, color: AppColors.primary, size: 20),
-                                  label: const Text('Add topic'),
+                                  label: Text(s.addTopic),
                                   style: TextButton.styleFrom(
                                     foregroundColor: AppColors.primary,
                                   ),
@@ -140,16 +148,16 @@ class _PracticePageState extends ConsumerState<PracticePage> {
                             ],
                           );
                         },
-                        loading: () => const Center(
+                        loading: () => Center(
                           child: Padding(
-                            padding: EdgeInsets.all(20.0),
-                            child: CircularProgressIndicator(color: AppColors.primary),
+                            padding: const EdgeInsets.all(20.0),
+                            child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
                           ),
                         ),
                         error: (e, st) => Center(
                           child: Text(
-                            'Error loading custom topics',
-                            style: TextStyle(color: AppColors.error),
+                            s.errorLoadingCustomTopics,
+                            style: TextStyle(color: Theme.of(context).colorScheme.error),
                           ),
                         ),
                       ),
@@ -167,17 +175,17 @@ class _PracticePageState extends ConsumerState<PracticePage> {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () => context.push('/live'),
-                  icon: const Icon(Icons.mic, color: Colors.white, size: 24),
-                  label: const Text('Start free talk'),
+                  icon: Icon(Icons.mic, color: Theme.of(context).colorScheme.onPrimary, size: 24),
+                  label: Text(s.startFreeTalk),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
                     ),
                     elevation: 8,
-                    shadowColor: AppColors.primary.withOpacity(0.5),
+                    shadowColor: Theme.of(context).colorScheme.primary.withOpacity(0.5),
                     textStyle: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -206,8 +214,9 @@ class _SegmentChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: selected ? AppColors.surfaceElevated : Colors.transparent,
+      color: selected ? scheme.surfaceContainerHighest : Colors.transparent,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         onTap: onTap,
@@ -216,12 +225,12 @@ class _SegmentChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            border: selected ? null : Border.all(color: AppColors.surfaceElevated),
+            border: selected ? null : Border.all(color: scheme.surfaceContainerHighest),
           ),
           child: Text(
             label,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: AppColors.textPrimary,
+                  color: scheme.onSurface,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                 ),
           ),
@@ -232,29 +241,36 @@ class _SegmentChip extends StatelessWidget {
 }
 
 class _CustomEmptyState extends StatelessWidget {
+  final String message;
+  final String addLabel;
   final VoidCallback onAddTap;
 
-  const _CustomEmptyState({required this.onAddTap});
+  const _CustomEmptyState({
+    required this.message,
+    required this.addLabel,
+    required this.onAddTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 32),
       child: Column(
         children: [
           Text(
-            'No custom topics yet',
+            message,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.textSecondary,
+                  color: scheme.onSurfaceVariant,
                 ),
           ),
           const SizedBox(height: 8),
           TextButton.icon(
             onPressed: onAddTap,
-            icon: const Icon(Icons.add, color: AppColors.primary, size: 20),
-            label: const Text('Create a topic'),
+            icon: Icon(Icons.add, color: scheme.primary, size: 20),
+            label: Text(addLabel),
             style: TextButton.styleFrom(
-              foregroundColor: AppColors.primary,
+              foregroundColor: scheme.primary,
             ),
           ),
         ],

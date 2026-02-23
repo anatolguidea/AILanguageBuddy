@@ -11,6 +11,7 @@ class Language {
 
   static const List<Language> supported = [
     Language(code: 'en', name: 'English', flag: '🇺🇸'),
+    Language(code: 'ro', name: 'Română', flag: '🇷🇴'),
     Language(code: 'es', name: 'Spanish', flag: '🇪🇸'),
     Language(code: 'fr', name: 'French', flag: '🇫🇷'),
     Language(code: 'de', name: 'German', flag: '🇩🇪'),

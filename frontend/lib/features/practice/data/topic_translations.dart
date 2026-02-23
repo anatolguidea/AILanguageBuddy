@@ -1,4 +1,4 @@
-/// Topic titles by language code. Keys: en, es, fr, de, it, pt, ru, ja, zh.
+/// Topic titles by language code. Keys: en, ro, es, fr, de, it, pt, ru, ja, zh.
 /// Fallback to English if a language is missing.
 const Map<String, Map<String, String>> kTopicTranslations = {
   'chef': {
@@ -11,6 +11,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Говорить о профессии шеф-повара',
     'ja': 'シェフの職業について話す',
     'zh': '谈论厨师职业',
+    'ro': 'Despre profesia de chef',
   },
   'recipe': {
     'en': 'Describe a favorite recipe',
@@ -22,6 +23,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Описать любимый рецепт',
     'ja': 'お気に入りのレシピを説明する',
     'zh': '描述最喜欢的食谱',
+    'ro': 'Descrie o rețetă preferată',
   },
   'interview': {
     'en': 'Job interview simulation',
@@ -33,6 +35,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Симуляция собеседования',
     'ja': '就職面接のシミュレーション',
     'zh': '模拟求职面试',
+    'ro': 'Simulare interviu de angajare',
   },
   'culinary_trends': {
     'en': 'Discuss culinary trends',
@@ -44,6 +47,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Обсуждать кулинарные тренды',
     'ja': '料理のトレンドについて話し合う',
     'zh': '讨论烹饪趋势',
+    'ro': 'Discută despre tendințe culinare',
   },
   'gastronomic_event': {
     'en': 'Plan a gastronomic event',
@@ -55,6 +59,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Спланировать гастрономическое мероприятие',
     'ja': '美食イベントを計画する',
     'zh': '策划美食活动',
+    'ro': 'Planifică un eveniment gastronomic',
   },
   'professional_skills': {
     'en': 'Talk about professional skills',
@@ -66,6 +71,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Говорить о профессиональных навыках',
     'ja': '専門スキルについて話す',
     'zh': '谈论专业技能',
+    'ro': 'Despre competențe profesionale',
   },
   'cooking_project': {
     'en': 'Present a cooking project',
@@ -77,6 +83,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Представить кулинарный проект',
     'ja': '料理プロジェクトを発表する',
     'zh': '介绍一个烹饪项目',
+    'ro': 'Prezintă un proiect culinar',
   },
   'food_supplier': {
     'en': 'Call a food supplier',
@@ -88,6 +95,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Позвонить поставщику продуктов',
     'ja': '食品サプライヤーに電話する',
     'zh': '给食品供应商打电话',
+    'ro': 'Sună un furnizor de alimente',
   },
   'international_cuisine': {
     'en': 'Talk about international cuisine',
@@ -99,6 +107,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Говорить о международной кухне',
     'ja': '国際料理について話す',
     'zh': '谈论国际美食',
+    'ro': 'Despre bucătăria internațională',
   },
   'cover_letter': {
     'en': 'Write a cover letter',
@@ -110,6 +119,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Написать сопроводительное письмо',
     'ja': 'カバーレターを書く',
     'zh': '写求职信',
+    'ro': 'Scrie o scrisoare de intenție',
   },
   'restaurant_complaint': {
     'en': 'Complain at a restaurant',
@@ -121,6 +131,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Пожаловаться в ресторане',
     'ja': 'レストランで苦情を言う',
     'zh': '在餐厅投诉',
+    'ro': 'Reclamație la restaurant',
   },
   'ordering_food': {
     'en': 'Order food at a restaurant',
@@ -132,6 +143,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Заказать еду в ресторане',
     'ja': 'レストランで注文する',
     'zh': '在餐厅点餐',
+    'ro': 'Comandă mâncare la restaurant',
   },
   'travel_airport': {
     'en': 'At the airport',
@@ -143,6 +155,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'В аэропорту',
     'ja': '空港で',
     'zh': '在机场',
+    'ro': 'La aeroport',
   },
   'doctor_visit': {
     'en': 'Doctor visit – describe symptoms',
@@ -154,6 +167,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Визит к врачу – описать симптомы',
     'ja': '医師の診察 – 症状を説明する',
     'zh': '看医生 – 描述症状',
+    'ro': 'Vizită la doctor – descrie simptomele',
   },
   'cafe_order': {
     'en': 'Order at a café',
@@ -165,6 +179,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Заказать в кафе',
     'ja': 'カフェで注文する',
     'zh': '在咖啡馆点餐',
+    'ro': 'Comandă la cafenea',
   },
   'market_shopping': {
     'en': 'Shopping at the market',
@@ -176,6 +191,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Покупки на рынке',
     'ja': '市場で買い物する',
     'zh': '在市场购物',
+    'ro': 'Cumpărături la piață',
   },
   'casual_friend': {
     'en': 'Casual chat with a friend',
@@ -187,6 +203,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Неформальный разговор с другом',
     'ja': '友達とのカジュアルな会話',
     'zh': '与朋友随意聊天',
+    'ro': 'Conversație casual cu un prieten',
   },
   'hotel_checkin': {
     'en': 'Hotel check-in',
@@ -198,6 +215,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Регистрация в отеле',
     'ja': 'ホテルのチェックイン',
     'zh': '酒店入住',
+    'ro': 'Check-in la hotel',
   },
   'directions': {
     'en': 'Ask for directions',
@@ -209,6 +227,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Спросить дорогу',
     'ja': '道を尋ねる',
     'zh': '问路',
+    'ro': 'Cere indicații',
   },
   'hobbies': {
     'en': 'Talk about hobbies',
@@ -220,6 +239,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Говорить о хобби',
     'ja': '趣味について話す',
     'zh': '谈论爱好',
+    'ro': 'Despre hobby-uri',
   },
   'weather': {
     'en': 'Discuss the weather',
@@ -231,6 +251,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Обсуждать погоду',
     'ja': '天気について話す',
     'zh': '谈论天气',
+    'ro': 'Despre vreme',
   },
   'booking': {
     'en': 'Make a reservation',
@@ -242,6 +263,7 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Сделать бронирование',
     'ja': '予約する',
     'zh': '预订',
+    'ro': 'Rezervare',
   },
   'small_talk': {
     'en': 'Small talk and introductions',
@@ -253,5 +275,78 @@ const Map<String, Map<String, String>> kTopicTranslations = {
     'ru': 'Светская беседа и знакомство',
     'ja': '雑談と自己紹介',
     'zh': '寒暄与介绍',
+    'ro': 'Conversație și prezentări',
+  },
+  'fitness': {
+    'en': 'Fitness and exercise',
+    'es': 'Fitness y ejercicio',
+    'fr': 'Fitness et exercice',
+    'de': 'Fitness und Sport',
+    'it': 'Fitness e esercizio',
+    'pt': 'Fitness e exercício',
+    'ru': 'Фитнес и упражнения',
+    'ja': 'フィットネスと運動',
+    'zh': '健身与运动',
+    'ro': 'Fitness și exerciții',
+  },
+  'pets': {
+    'en': 'Pets and animals',
+    'es': 'Mascotas y animales',
+    'fr': 'Animaux de compagnie',
+    'de': 'Haustiere und Tiere',
+    'it': 'Animali domestici',
+    'pt': 'Animais de estimação',
+    'ru': 'Домашние животные',
+    'ja': 'ペットと動物',
+    'zh': '宠物与动物',
+    'ro': 'Animale de companie',
+  },
+  'movies': {
+    'en': 'Movies and films',
+    'es': 'Películas y cine',
+    'fr': 'Films et cinéma',
+    'de': 'Filme und Kino',
+    'it': 'Film e cinema',
+    'pt': 'Filmes e cinema',
+    'ru': 'Фильмы и кино',
+    'ja': '映画',
+    'zh': '电影',
+    'ro': 'Filme',
+  },
+  'music': {
+    'en': 'Music and concerts',
+    'es': 'Música y conciertos',
+    'fr': 'Musique et concerts',
+    'de': 'Musik und Konzerte',
+    'it': 'Musica e concerti',
+    'pt': 'Música e concertos',
+    'ru': 'Музыка и концерты',
+    'ja': '音楽とコンサート',
+    'zh': '音乐与演唱会',
+    'ro': 'Muzică și concerte',
+  },
+  'family': {
+    'en': 'Family and relatives',
+    'es': 'Familia y parientes',
+    'fr': 'Famille et proches',
+    'de': 'Familie und Verwandte',
+    'it': 'Famiglia e parenti',
+    'pt': 'Família e parentes',
+    'ru': 'Семья и родственники',
+    'ja': '家族と親戚',
+    'zh': '家庭与亲戚',
+    'ro': 'Familie și rude',
+  },
+  'work_meeting': {
+    'en': 'Work meeting',
+    'es': 'Reunión de trabajo',
+    'fr': 'Réunion de travail',
+    'de': 'Arbeitstreffen',
+    'it': 'Riunione di lavoro',
+    'pt': 'Reunião de trabalho',
+    'ru': 'Рабочая встреча',
+    'ja': '仕事の会議',
+    'zh': '工作会议',
+    'ro': 'Întâlnire de lucru',
   },
 };

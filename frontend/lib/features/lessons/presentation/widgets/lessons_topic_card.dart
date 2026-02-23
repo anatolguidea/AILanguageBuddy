@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../../theme/app_colors.dart';
 
 /// Topic header card: "B2 · Topic 1", main title, optional subtitle, filter icon.
 class LessonsTopicCard extends StatelessWidget {
@@ -20,10 +19,11 @@ class LessonsTopicCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
+        color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -36,14 +36,14 @@ class LessonsTopicCard extends StatelessWidget {
                 Text(
                   '$level · Topic $topicIndex',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: scheme.onSurfaceVariant,
                       ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AppColors.textPrimary,
+                        color: scheme.onSurface,
                         fontWeight: FontWeight.bold,
                       ),
                 ),
@@ -52,7 +52,7 @@ class LessonsTopicCard extends StatelessWidget {
                   Text(
                     subtitle!,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
+                          color: scheme.onSurfaceVariant,
                         ),
                   ),
                 ],
@@ -62,9 +62,9 @@ class LessonsTopicCard extends StatelessWidget {
           if (onFilterTap != null)
             IconButton(
               onPressed: onFilterTap,
-              icon: const Icon(
+              icon: Icon(
                 Icons.tune_rounded,
-                color: AppColors.textSecondary,
+                color: scheme.onSurfaceVariant,
                 size: 24,
               ),
               style: IconButton.styleFrom(

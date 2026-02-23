@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../settings/presentation/providers/language_provider.dart';
+import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
 import '../domain/entities/topic.dart';
 import 'topic_translations.dart';
 
@@ -34,6 +35,12 @@ const List<({String id, IconData icon})> kTopicConfigs = [
   (id: 'weather', icon: FontAwesomeIcons.cloudSun),
   (id: 'booking', icon: FontAwesomeIcons.calendarCheck),
   (id: 'small_talk', icon: FontAwesomeIcons.comments),
+  (id: 'fitness', icon: FontAwesomeIcons.dumbbell),
+  (id: 'pets', icon: FontAwesomeIcons.paw),
+  (id: 'movies', icon: FontAwesomeIcons.film),
+  (id: 'music', icon: FontAwesomeIcons.music),
+  (id: 'family', icon: FontAwesomeIcons.peopleGroup),
+  (id: 'work_meeting', icon: FontAwesomeIcons.video),
 ];
 
 class MockTopicRepository implements TopicRepository {
@@ -60,6 +67,6 @@ final topicRepositoryProvider = Provider<TopicRepository>((ref) {
 
 final topicsProvider = FutureProvider<List<Topic>>((ref) async {
   final repository = ref.watch(topicRepositoryProvider);
-  final language = ref.watch(languageProvider);
-  return repository.getTopics(language.code);
+  final locale = ref.watch(appLocaleProvider);
+  return repository.getTopics(locale);
 });

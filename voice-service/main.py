@@ -294,61 +294,51 @@ async def _synthesize_edge_mp3(text: str, language: str, use_fallback_voice: boo
 @app.post("/synthesize/instant")
 def synthesize_instant(request: SpeakRequest):
     language = (request.language or "en").lower()
+    # Normalize to 2-letter code for edge-tts
+    lang_code = language if len(language) <= 3 else language[:2]
     text = (request.text or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Text must not be empty")
 
-    # If NOT English, use Edge-TTS
-    if language != "en":
+    # Use Edge-TTS for all languages (high-speed, consistent latency; no Chatterbox load).
+    try:
+        logger.info(
+            f"Instant edge-tts synthesis ({lang_code}): '{text[:80]}{'...' if len(text) > 80 else ''}'"
+        )
+        audio_mp3 = asyncio.run(_synthesize_edge_mp3(text, lang_code))
+        return Response(
+            content=audio_mp3,
+            media_type="audio/mpeg",
+            headers={"X-Audio-Codec": "mp3", "X-Audio-Sample-Rate": "24000"},
+        )
+    except NoAudioReceived as e:
+        logger.warning(
+            f"edge-tts NoAudioReceived for language={lang_code}, retrying with fallback voice: {e}"
+        )
         try:
-            logger.info(f"Instant edge-tts synthesis ({language}): '{text[:80]}{'...' if len(text) > 80 else ''}'")
-            audio_mp3 = asyncio.run(_synthesize_edge_mp3(text, language))
+            audio_mp3 = asyncio.run(
+                _synthesize_edge_mp3(text, lang_code, use_fallback_voice=True)
+            )
             return Response(
                 content=audio_mp3,
                 media_type="audio/mpeg",
-                headers={"X-Audio-Codec": "mp3", "X-Audio-Sample-Rate": "24000"},
+                headers={
+                    "X-Audio-Codec": "mp3",
+                    "X-Audio-Sample-Rate": "24000",
+                    "X-TTS-Fallback": "true",
+                },
             )
-        except NoAudioReceived as e:
-            logger.warning(f"edge-tts NoAudioReceived for language={language}, retrying with fallback voice: {e}")
-            try:
-                audio_mp3 = asyncio.run(_synthesize_edge_mp3(text, language, use_fallback_voice=True))
-                return Response(
-                    content=audio_mp3,
-                    media_type="audio/mpeg",
-                    headers={"X-Audio-Codec": "mp3", "X-Audio-Sample-Rate": "24000", "X-TTS-Fallback": "true"},
-                )
-            except Exception as retry_e:
-                logger.error(f"edge-tts fallback synthesis also failed: {retry_e}")
-                traceback.print_exc()
-                raise HTTPException(status_code=503, detail="TTS temporarily unavailable for this language. Please try again.")
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        except Exception as e:
-            logger.error(f"edge-tts synthesis error: {e}")
+        except Exception as retry_e:
+            logger.error(f"edge-tts fallback synthesis also failed: {retry_e}")
             traceback.print_exc()
-            raise HTTPException(status_code=500, detail=str(e))
-
-    # Else (English), use Chatterbox
-    try:
-        if not tts_model:
-            raise HTTPException(status_code=503, detail="TTS Model not loaded")
-        logger.info(f"Instant chatterbox synthesis ({language}): '{text}'")
-        with torch.inference_mode(), torch.no_grad():
-            wav = tts_model.generate(text)
-
-        if hasattr(wav, 'cpu'):
-            wav = wav.cpu()
-        wav_numpy = wav.numpy() if hasattr(wav, 'numpy') else np.array(wav)
-        wav_numpy = wav_numpy.squeeze()
-        wav_int16 = (np.clip(wav_numpy, -1, 1) * 32767).astype(np.int16)
-
-        return Response(
-            content=wav_int16.tobytes(),
-            media_type="application/octet-stream",
-            headers={"X-Audio-Codec": "pcm16", "X-Audio-Sample-Rate": "24000"},
-        )
+            raise HTTPException(
+                status_code=503,
+                detail="TTS temporarily unavailable for this language. Please try again.",
+            )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Instant chatterbox synthesis error: {e}")
+        logger.error(f"edge-tts synthesis error: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 

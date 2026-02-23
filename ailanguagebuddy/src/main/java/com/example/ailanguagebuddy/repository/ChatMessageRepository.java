@@ -30,4 +30,6 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
                         String mode,
                         LocalDateTime createdAt,
                         Pageable pageable);
+
+        void deleteByUserIdAndMode(UUID userId, String mode);
 }

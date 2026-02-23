@@ -71,8 +71,14 @@ public class ChatService {
 
             AiTutorResult result = parseTutorResult(rawResponse);
 
-            // Persist what the user actually sees in the chat bubble, flush immediately.
-            repository.saveAndFlush(new ChatMessage(result.replyText(), "assistant", userId, mode));
+            // Persist assistant message with feedback metadata (correction, tips).
+            repository.saveAndFlush(new ChatMessage(
+                    result.replyText(),
+                    "assistant",
+                    userId,
+                    mode,
+                    result.correction(),
+                    result.tips()));
             return result;
         } catch (Exception e) {
             throw new RuntimeException("AI request failed", e);
@@ -125,39 +131,80 @@ public class ChatService {
         return items;
     }
 
+    @Transactional
+    public void deleteHistory(UUID userId, String mode) {
+        repository.deleteByUserIdAndMode(userId, mode == null || mode.isBlank() ? "general" : mode);
+    }
+
     private AiTutorResult parseTutorResult(String raw) {
         if (raw == null || raw.isBlank()) {
-            return new AiTutorResult("No reply received from AI.", List.of(), List.of());
+            return new AiTutorResult("No reply received from AI.", null, null, List.of(), List.of());
         }
 
         String trimmed = raw.trim();
-        // Only attempt to parse as JSON if it looks like a JSON object
-        if (trimmed.startsWith("{")) {
+        // Strip markdown code block if present
+        if (trimmed.startsWith("```")) {
+            int start = trimmed.indexOf('{');
+            int end = trimmed.lastIndexOf('}');
+            if (start >= 0 && end > start) trimmed = trimmed.substring(start, end + 1);
+        }
+        // Fix invalid JSON: LLM often outputs \' inside strings; JSON only allows \"
+        String sanitized = trimmed.replace("\\'", "'");
+
+        if (sanitized.startsWith("{")) {
             try {
-                var node = objectMapper.readTree(raw);
+                var node = objectMapper.readTree(sanitized);
                 if (node.isObject()) {
-                    var replyText = node.path("replyText").asText(raw);
-
-                    var correctionsNode = node.path("corrections");
-                    List<com.example.ailanguagebuddy.domain.Correction> corrections = correctionsNode.isArray()
-                            ? objectMapper.readerForListOf(com.example.ailanguagebuddy.domain.Correction.class)
-                                    .readValue(correctionsNode)
-                            : List.of();
-
-                    var vocabNode = node.path("vocabulary");
-                    List<com.example.ailanguagebuddy.domain.VocabularyItem> vocabulary = vocabNode.isArray()
-                            ? objectMapper.readerForListOf(com.example.ailanguagebuddy.domain.VocabularyItem.class)
-                                    .readValue(vocabNode)
-                            : List.of();
-
-                    return new AiTutorResult(replyText, corrections, vocabulary);
+                    String replyText = node.has("reply")
+                            ? node.path("reply").asText("").trim()
+                            : node.path("replyText").asText("").trim();
+                    if (replyText.isEmpty()) replyText = raw;
+                    String correction = node.has("correction") && !node.path("correction").isNull()
+                            ? node.path("correction").asText("").trim()
+                            : null;
+                    String tips = node.has("tips") && !node.path("tips").isNull()
+                            ? node.path("tips").asText("").trim()
+                            : null;
+                    if (correction != null && correction.isEmpty()) correction = null;
+                    if (tips != null && tips.isEmpty()) tips = null;
+                    return new AiTutorResult(replyText, correction, tips);
                 }
             } catch (Exception ex) {
                 log.warn("Failed to parse AI JSON, falling back to raw text: {}", ex.getMessage());
             }
         }
 
-        // Fallback: treat the whole response as plain text.
-        return new AiTutorResult(raw, List.of(), List.of());
+        return new AiTutorResult(raw, null, null, List.of(), List.of());
+    }
+
+    @Transactional
+    public AiTutorResult getInitialMessage(UUID userId, LearningContext context) {
+        try {
+            String mode = (context != null && context.mode() != null && !context.mode().isBlank())
+                    ? context.mode()
+                    : "general";
+            String historyBlock = buildHistoryBlockForPrompt(userId, mode, PROMPT_HISTORY_LIMIT);
+            var systemInstructions = new SystemMessage(
+                    promptBuilder.buildInitialGreetingPrompt(context, historyBlock));
+            var userMsg = new UserMessage("(Start the conversation with a short greeting for this topic.)");
+            Prompt prompt = new Prompt(List.of(systemInstructions, userMsg));
+
+            String rawResponse = chatModel.call(prompt)
+                    .getResult()
+                    .getOutput()
+                    .getText();
+
+            AiTutorResult result = parseTutorResult(rawResponse);
+            repository.saveAndFlush(new ChatMessage(
+                    result.replyText(),
+                    "assistant",
+                    userId,
+                    mode,
+                    result.correction(),
+                    result.tips()));
+            return result;
+        } catch (Exception e) {
+            throw new RuntimeException("Initial message request failed", e);
+        }
     }
 }

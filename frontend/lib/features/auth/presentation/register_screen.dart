@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/l10n/app_strings.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/auth_screen_layout.dart';
 import '../../../../core/widgets/auth_text_field.dart';
 import 'auth_state.dart';
 import 'sign_in_screen.dart';
+import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -45,11 +47,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         // When email confirmation is disabled in Supabase, session is set and user is already signed in.
         if (response.session == null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Check your email to confirm your account')),
+            SnackBar(content: Text(AppStrings.forLocale(ref.read(appLocaleProvider)).checkEmailConfirm)),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Account created!')),
+            SnackBar(content: Text(AppStrings.forLocale(ref.read(appLocaleProvider)).accountCreated)),
           );
           Navigator.of(context).popUntil((route) => route.isFirst);
         }
@@ -66,8 +68,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final locale = ref.watch(appLocaleProvider);
+    final s = AppStrings.forLocale(locale);
     return AuthScreenLayout(
-      title: 'Create account',
+      title: s.createAccount,
       children: [
         const SizedBox(height: 8),
         if (_error != null) ...[
@@ -81,19 +85,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             children: [
               AuthTextField(
                 controller: _nameController,
-                label: 'Name (optional)',
-                hint: 'Your name',
+                label: s.nameOptional,
+                hint: s.yourName,
                 keyboardType: TextInputType.name,
                 autofillHints: const [AutofillHints.name],
               ),
               const SizedBox(height: 16),
               AuthTextField(
                 controller: _emailController,
-                label: 'Email',
-                hint: 'you@example.com',
+                label: s.email,
+                hint: s.youExampleCom,
                 validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Enter your email';
-                  if (!v.contains('@')) return 'Enter a valid email';
+                  if (v == null || v.trim().isEmpty) return s.enterYourEmail;
+                  if (!v.contains('@')) return s.enterValidEmail;
                   return null;
                 },
                 autofillHints: const [AutofillHints.email],
@@ -101,26 +105,26 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               const SizedBox(height: 16),
               AuthTextField(
                 controller: _passwordController,
-                label: 'Password',
-                hint: 'At least 6 characters',
+                label: s.password,
+                hint: s.atLeast6Chars,
                 obscureText: true,
                 keyboardType: TextInputType.visiblePassword,
                 textInputAction: TextInputAction.done,
                 validator: (v) {
-                  if (v == null || v.length < 6) return 'Password must be at least 6 characters';
+                  if (v == null || v.length < 6) return s.passwordMin6;
                   return null;
                 },
                 autofillHints: const [AutofillHints.newPassword],
               ),
               const SizedBox(height: 24),
-              AppButton(label: 'Create account', onPressed: _submit, loading: _loading),
+              AppButton(label: s.createAccount, onPressed: _submit, loading: _loading),
             ],
           ),
         ),
       ],
       footer: TextButton(
         onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Already have an account? Sign in'),
+        child: Text('${s.alreadyHaveAccount} ${s.logIn}'),
       ),
     );
   }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../../theme/app_colors.dart';
 import '../../../../core/constants/app_dimensions.dart';
 
 class ProfileSection extends StatelessWidget {
@@ -14,20 +13,21 @@ class ProfileSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: AppColors.textSecondary,
+                color: colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.bold,
               ),
         ),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: AppColors.surfaceDark,
+            color: colorScheme.surface,
             borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
           ),
           child: Column(

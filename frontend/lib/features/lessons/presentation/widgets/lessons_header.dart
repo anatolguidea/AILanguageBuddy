@@ -8,11 +8,13 @@ import '../../../settings/presentation/providers/language_provider.dart';
 class LessonsHeader extends ConsumerWidget {
   final int streakCount;
   final VoidCallback? onUpgrade;
+  final String? upgradeLabel;
 
   const LessonsHeader({
     super.key,
     this.streakCount = 0,
     this.onUpgrade,
+    this.upgradeLabel,
   });
 
   @override
@@ -37,7 +39,7 @@ class LessonsHeader extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.only(right: 10),
                     child: Material(
-                      color: AppColors.primary,
+                      color: Theme.of(context).colorScheme.primary,
                       borderRadius: BorderRadius.circular(20),
                       child: InkWell(
                         onTap: onUpgrade,
@@ -47,12 +49,12 @@ class LessonsHeader extends ConsumerWidget {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.star_rounded, color: Colors.white, size: 20),
+                              Icon(Icons.star_rounded, color: Theme.of(context).colorScheme.onPrimary, size: 20),
                               const SizedBox(width: 6),
                               Text(
-                                'Upgrade',
+                                upgradeLabel ?? 'Upgrade',
                                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                      color: Colors.white,
+                                      color: Theme.of(context).colorScheme.onPrimary,
                                       fontWeight: FontWeight.w600,
                                     ),
                               ),
@@ -92,9 +94,10 @@ class LessonsHeader extends ConsumerWidget {
   }
 
   void _showLanguageSheet(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppColors.surfaceDark,
+      backgroundColor: scheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -113,7 +116,7 @@ class LessonsHeader extends ConsumerWidget {
                 Text(
                   'Select language',
                   style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                        color: AppColors.textPrimary,
+                        color: scheme.onSurface,
                         fontWeight: FontWeight.bold,
                       ),
                 ),
@@ -128,11 +131,11 @@ class LessonsHeader extends ConsumerWidget {
                         title: Text(
                           lang.name,
                           style: TextStyle(
-                            color: AppColors.textPrimary,
+                            color: scheme.onSurface,
                             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
-                        trailing: isSelected ? const Icon(Icons.check, color: AppColors.primary) : null,
+                        trailing: isSelected ? Icon(Icons.check, color: scheme.primary) : null,
                         onTap: () {
                           ref.read(languageProvider.notifier).setLanguage(lang);
                           Navigator.of(ctx).pop();
@@ -158,6 +161,7 @@ class _LanguageFlagButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -168,8 +172,8 @@ class _LanguageFlagButton extends StatelessWidget {
           height: 48,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: AppColors.surfaceElevated,
-            border: Border.all(color: AppColors.surfaceElevated),
+            color: scheme.surfaceContainerHighest,
+            border: Border.all(color: scheme.surfaceContainerHighest),
           ),
           alignment: Alignment.center,
           child: Text(language.flag, style: const TextStyle(fontSize: 28)),

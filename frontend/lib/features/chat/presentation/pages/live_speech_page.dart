@@ -10,6 +10,8 @@ import 'package:audio_session/audio_session.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../theme/app_colors.dart';
 import '../providers/chat_provider.dart';
+import 'package:ailanguageapp/core/l10n/app_strings.dart';
+import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
 
 // Helper to convert HTTP URL to WS URL
 String _getWsUrl(String? userId, String? accessToken) {
@@ -207,6 +209,50 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
   }
 }
 
+void _showAppLanguagePicker(BuildContext context, WidgetRef ref) {
+  final notifier = ref.read(appLocaleProvider.notifier);
+  final current = ref.read(appLocaleProvider);
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Theme.of(context).colorScheme.surface,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+    builder: (ctx) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(
+                current == AppLocaleNotifier.en ? Icons.check_circle : Icons.circle_outlined,
+                color: current == AppLocaleNotifier.en ? Theme.of(ctx).colorScheme.primary : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.5),
+                size: 22,
+              ),
+              title: const Text('English'),
+              onTap: () {
+                notifier.setLocale(AppLocaleNotifier.en);
+                if (context.mounted) Navigator.of(context).pop();
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                current == AppLocaleNotifier.ro ? Icons.check_circle : Icons.circle_outlined,
+                color: current == AppLocaleNotifier.ro ? Theme.of(ctx).colorScheme.primary : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.5),
+                size: 22,
+              ),
+              title: const Text('Română'),
+              onTap: () {
+                notifier.setLocale(AppLocaleNotifier.ro);
+                if (context.mounted) Navigator.of(context).pop();
+              },
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 class LiveSpeechPage extends ConsumerWidget {
   const LiveSpeechPage({super.key});
 
@@ -214,37 +260,42 @@ class LiveSpeechPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final speechState = ref.watch(liveSpeechProvider);
     final notifier = ref.read(liveSpeechProvider.notifier);
+    final locale = ref.watch(appLocaleProvider);
+    final s = AppStrings.forLocale(locale);
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundBlack,
+      backgroundColor: scheme.surface,
       appBar: AppBar(
-        title: const Text('Live Assistant'),
+        title: Text(s.liveAssistant),
         backgroundColor: Colors.transparent,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.language_rounded, color: scheme.onSurface),
+            onPressed: () => _showAppLanguagePicker(context, ref),
+            tooltip: s.appLanguage,
+          ),
+        ],
       ),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Status Info
             if (speechState.errorMessage != null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Text(
                   speechState.errorMessage!,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppColors.error, fontSize: 14),
+                  style: TextStyle(color: scheme.error, fontSize: 14),
                 ),
               ),
-              
-            // Debug / Test Connection
             TextButton.icon(
               onPressed: () => notifier.connect(),
-              icon: const Icon(Icons.refresh, color: Colors.white54),
-              label: const Text("Reconnect WS", style: TextStyle(color: Colors.white54)),
+              icon: Icon(Icons.refresh, color: scheme.onSurfaceVariant),
+              label: Text(s.reconnectWs, style: TextStyle(color: scheme.onSurfaceVariant)),
             ),
             const SizedBox(height: 20),
-
-            // Visualizer Ring
             GestureDetector(
               onLongPressStart: (_) => notifier.startRecording(),
               onLongPressEnd: (_) => notifier.stopRecording(),
@@ -254,11 +305,11 @@ class LiveSpeechPage extends ConsumerWidget {
                 height: 200,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _getColor(speechState.status),
+                  color: _getColor(speechState.status, scheme),
                   boxShadow: [
                     if (speechState.status == VoiceState.listening)
                       BoxShadow(
-                        color: AppColors.primary.withOpacity(0.5),
+                        color: scheme.primary.withOpacity(0.5),
                         blurRadius: 50,
                         spreadRadius: 20,
                       )
@@ -267,21 +318,21 @@ class LiveSpeechPage extends ConsumerWidget {
                 child: Icon(
                   _getIcon(speechState.status),
                   size: 80,
-                  color: Colors.white,
+                  color: _getIconColor(speechState.status, scheme),
                 ),
               ),
             ),
             const SizedBox(height: 40),
             Text(
-              _getStatusText(speechState.status),
+              _getStatusText(speechState.status, s),
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: Colors.white,
+                color: scheme.onSurface,
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
-              "Hold to Speak",
-              style: TextStyle(color: Colors.white54),
+            Text(
+              s.holdToSpeak,
+              style: TextStyle(color: scheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -289,18 +340,18 @@ class LiveSpeechPage extends ConsumerWidget {
     );
   }
 
-  Color _getColor(VoiceState status) {
+  Color _getColor(VoiceState status, ColorScheme scheme) {
     switch (status) {
       case VoiceState.listening:
-        return AppColors.primary;
+        return scheme.primary;
       case VoiceState.processing:
         return AppColors.secondary;
       case VoiceState.speaking:
         return Colors.green;
       case VoiceState.error:
-        return AppColors.error;
+        return scheme.error;
       default:
-        return AppColors.surfaceElevated;
+        return scheme.surfaceContainerHighest;
     }
   }
 
@@ -317,16 +368,31 @@ class LiveSpeechPage extends ConsumerWidget {
     }
   }
 
-  String _getStatusText(VoiceState status) {
+  Color _getIconColor(VoiceState status, ColorScheme scheme) {
     switch (status) {
       case VoiceState.listening:
-        return "Listening...";
+        return scheme.onPrimary;
       case VoiceState.processing:
-        return "Thinking...";
+        return scheme.onSecondary;
       case VoiceState.speaking:
-        return "Speaking...";
+        return Colors.white;
+      case VoiceState.error:
+        return scheme.onError;
       default:
-        return "Tap & Hold to Speak";
+        return scheme.onSurface;
+    }
+  }
+
+  String _getStatusText(VoiceState status, AppStringsData s) {
+    switch (status) {
+      case VoiceState.listening:
+        return s.listening;
+      case VoiceState.processing:
+        return s.liveThinking;
+      case VoiceState.speaking:
+        return s.liveSpeaking;
+      default:
+        return s.tapHoldToSpeak;
     }
   }
 }

@@ -32,6 +32,12 @@ public class ChatMessage {
     @Column(name = "mode", nullable = false, length = 50)
     private String mode = "general";
 
+    @Column(columnDefinition = "TEXT", name = "correction")
+    private String correction;
+
+    @Column(columnDefinition = "TEXT", name = "tips")
+    private String tips;
+
     public ChatMessage() {
     }
 
@@ -51,5 +57,14 @@ public class ChatMessage {
         this.role = role;
         this.userId = userId;
         this.mode = mode;
+    }
+
+    public ChatMessage(String content, String role, UUID userId, String mode, String correction, String tips) {
+        this.content = content;
+        this.role = role;
+        this.userId = userId;
+        this.mode = mode;
+        this.correction = correction;
+        this.tips = tips;
     }
 }

@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/l10n/app_strings.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../data/auth_repository.dart';
 import 'auth_state.dart';
 import 'register_screen.dart';
 import 'sign_in_screen.dart';
+import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
 
 class WelcomeScreen extends ConsumerWidget {
   const WelcomeScreen({super.key});
@@ -16,6 +18,8 @@ class WelcomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final locale = ref.watch(appLocaleProvider);
+    final s = AppStrings.forLocale(locale);
 
     return Scaffold(
       body: SafeArea(
@@ -36,7 +40,7 @@ class WelcomeScreen extends ConsumerWidget {
               const SizedBox(height: 32),
               // Title
               Text(
-                'Welcome to\nAI Language Buddy',
+                s.welcomeToApp,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.bold,
@@ -46,7 +50,7 @@ class WelcomeScreen extends ConsumerWidget {
               const SizedBox(height: 16),
               // Subtitle
               Text(
-                'The most immersive language learning app in the world.\nBuilt so you stick with it.',
+                s.welcomeSubtitle,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurface.withOpacity(0.7),
@@ -59,11 +63,11 @@ class WelcomeScreen extends ConsumerWidget {
                 onPressed: () {
                   // TODO: Implement Apple Sign In
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Apple Sign In coming soon!')),
+                    SnackBar(content: Text(s.appleSignInComing)),
                   );
                 },
                 icon: const Icon(FontAwesomeIcons.apple, color: Colors.white),
-                label: const Text('Continue with Apple'),
+                label: Text(s.continueWithApple),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.black,
                   foregroundColor: Colors.white,
@@ -81,7 +85,7 @@ class WelcomeScreen extends ConsumerWidget {
                 },
                 icon: const Icon(FontAwesomeIcons.google, color: Colors.red), // Brand color
                 label: Text(
-                  'Continue with Google',
+                  s.continueWithGoogle,
                   style: TextStyle(color: isDark ? Colors.white : Colors.black),
                 ),
                 style: OutlinedButton.styleFrom(
@@ -100,7 +104,7 @@ class WelcomeScreen extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
-                      'or',
+                      s.or,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurface.withOpacity(0.5),
                       ),
@@ -113,7 +117,7 @@ class WelcomeScreen extends ConsumerWidget {
 
               // Email Sign In (Used AppButton for primary style)
               AppButton(
-                label: 'Continue with Email',
+                label: s.continueWithEmail,
                 onPressed: () {
                   // Navigate to Register or specialized Email entry
                   Navigator.of(context).push(
@@ -130,7 +134,7 @@ class WelcomeScreen extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    'Already have an account?',
+                    s.alreadyHaveAccount,
                     style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.7)),
                   ),
                   TextButton(
@@ -139,7 +143,7 @@ class WelcomeScreen extends ConsumerWidget {
                         MaterialPageRoute(builder: (_) => const SignInScreen()),
                       );
                     },
-                    child: const Text('Log in'),
+                    child: Text(s.logIn),
                   ),
                 ],
               ),

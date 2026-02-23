@@ -7,6 +7,7 @@ import 'core/config.dart';
 
 import 'core/router/app_router.dart';
 import 'theme/app_theme.dart';
+import 'package:ailanguageapp/features/settings/presentation/providers/theme_mode_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,13 +24,14 @@ class AiLanguageApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
-    
+    final themeMode = ref.watch(themeModeProvider);
+
     return MaterialApp.router(
       title: 'AI Language Buddy',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-      themeMode: ThemeMode.dark,
+      themeMode: themeMode,
       routerConfig: router,
     );
   }

@@ -41,15 +41,46 @@ public class ChatController {
                                 request.targetLanguage(),
                                 request.nativeLanguage(),
                                 request.level(),
-                                request.mode());
+                                request.mode(),
+                                request.instructionLocale() != null && !request.instructionLocale().isBlank()
+                                        ? request.instructionLocale() : "en");
                 var result = chatService.askLanguageCoach(request.message(), user.userId(), ctx);
-                var correctionsDto = result.corrections().stream()
+                var correctionsDto = result.corrections() != null ? result.corrections().stream()
                                 .map(c -> new CorrectionDto(c.original(), c.corrected(), c.explanation()))
-                                .toList();
-                var vocabDto = result.vocabulary().stream()
+                                .toList() : List.<CorrectionDto>of();
+                var vocabDto = result.vocabulary() != null ? result.vocabulary().stream()
                                 .map(v -> new VocabularyItemDto(v.term(), v.translation(), v.note()))
-                                .toList();
-                return ResponseEntity.ok(new ChatAskResponse(result.replyText(), correctionsDto, vocabDto));
+                                .toList() : List.<VocabularyItemDto>of();
+                return ResponseEntity.ok(new ChatAskResponse(
+                                result.replyText(),
+                                result.correction(),
+                                result.tips(),
+                                correctionsDto,
+                                vocabDto));
+        }
+
+        @GetMapping("/initial")
+        public ResponseEntity<ChatAskResponse> initial(
+                        @AuthenticationPrincipal Jwt jwt,
+                        @RequestParam(defaultValue = "general") String mode,
+                        @RequestParam(required = false) String targetLanguage,
+                        @RequestParam(required = false) String nativeLanguage,
+                        @RequestParam(required = false) String level,
+                        @RequestParam(required = false) String instructionLocale) {
+                var user = authUserResolver.fromJwt(jwt);
+                var ctx = new LearningContext(
+                                targetLanguage != null ? targetLanguage : "English",
+                                nativeLanguage != null ? nativeLanguage : "Romanian",
+                                level != null ? level : "B1",
+                                mode,
+                                instructionLocale != null && !instructionLocale.isBlank() ? instructionLocale : "en");
+                var result = chatService.getInitialMessage(user.userId(), ctx);
+                return ResponseEntity.ok(new ChatAskResponse(
+                                result.replyText(),
+                                result.correction(),
+                                result.tips(),
+                                List.of(),
+                                List.of()));
         }
 
         @GetMapping("/history")
@@ -64,7 +95,9 @@ public class ChatController {
                                                 m.getContent(),
                                                 m.getRole(),
                                                 m.getCreatedAt(),
-                                                m.getUserId()))
+                                                m.getUserId(),
+                                                m.getCorrection(),
+                                                m.getTips()))
                                 .toList();
                 return ResponseEntity.ok(items);
         }
@@ -102,7 +135,9 @@ public class ChatController {
                                                 m.getContent(),
                                                 m.getRole(),
                                                 m.getCreatedAt(),
-                                                m.getUserId()))
+                                                m.getUserId(),
+                                                m.getCorrection(),
+                                                m.getTips()))
                                 .toList();
 
                 String nextCursor = null;
@@ -113,5 +148,14 @@ public class ChatController {
                 }
 
                 return ResponseEntity.ok(new ChatHistoryResponse(items, nextCursor));
+        }
+
+        @DeleteMapping("/history")
+        public ResponseEntity<Void> deleteHistory(
+                        @AuthenticationPrincipal Jwt jwt,
+                        @RequestParam(defaultValue = "general") String mode) {
+                var user = authUserResolver.fromJwt(jwt);
+                chatService.deleteHistory(user.userId(), mode);
+                return ResponseEntity.noContent().build();
         }
 }

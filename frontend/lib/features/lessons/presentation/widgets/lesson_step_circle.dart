@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../../theme/app_colors.dart';
 import '../../domain/entities/lesson.dart';
 
 /// Single lesson as a circular step (design: dumbbell, presentation, abc, trophy icons).
@@ -32,6 +31,7 @@ class LessonStepCircle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final isCompleted = lesson.status == LessonStatus.completed;
     final isAvailable = lesson.status == LessonStatus.available;
     final isLocked = lesson.status == LessonStatus.locked;
@@ -55,17 +55,17 @@ class LessonStepCircle extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isCompleted
-                  ? AppColors.primary
+                  ? scheme.primary
                   : isAvailable
-                      ? AppColors.primary
-                      : AppColors.surfaceElevated,
+                      ? scheme.primary
+                      : scheme.surfaceContainerHighest,
               border: isAvailable && !isCompleted
-                  ? Border.all(color: AppColors.primary.withOpacity(0.5), width: 2)
+                  ? Border.all(color: scheme.primary.withOpacity(0.5), width: 2)
                   : null,
               boxShadow: isAvailable || isCompleted
                   ? [
                       BoxShadow(
-                        color: AppColors.primary.withOpacity(0.35),
+                        color: scheme.primary.withOpacity(0.35),
                         blurRadius: 12,
                         spreadRadius: 0,
                       ),
@@ -74,7 +74,7 @@ class LessonStepCircle extends StatelessWidget {
             ),
             child: Icon(
               isCompleted ? Icons.check_rounded : _iconForIndex(lesson.orderIndex),
-              color: isCompleted || isAvailable ? Colors.white : AppColors.textTertiary,
+              color: isCompleted || isAvailable ? scheme.onPrimary : scheme.onSurfaceVariant,
               size: 32,
             ),
           ),
@@ -88,7 +88,7 @@ class LessonStepCircle extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: isAvailable || isCompleted ? AppColors.textPrimary : AppColors.textTertiary,
+                  color: isAvailable || isCompleted ? scheme.onSurface : scheme.onSurfaceVariant,
                   fontWeight: isAvailable && !isCompleted ? FontWeight.w600 : FontWeight.normal,
                 ),
           ),
@@ -99,7 +99,7 @@ class LessonStepCircle extends StatelessWidget {
             width: 3,
             height: 32,
             decoration: BoxDecoration(
-              color: isCompleted ? AppColors.primary : AppColors.surfaceElevated,
+              color: isCompleted ? scheme.primary : scheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(2),
             ),
           ),

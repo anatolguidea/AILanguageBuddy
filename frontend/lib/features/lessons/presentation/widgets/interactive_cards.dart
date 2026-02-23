@@ -20,13 +20,14 @@ class ImageChoiceWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final options = (cardData['options'] as List?) ?? [];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           cardData['question']?.toString() ?? '',
-          style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
+          style: TextStyle(color: scheme.onSurface, fontSize: 16),
         ),
         const SizedBox(height: 10),
         ...options.map((optionRaw) {
@@ -37,11 +38,11 @@ class ImageChoiceWidget extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 8),
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.textPrimary,
+                foregroundColor: scheme.onSurface,
                 side: BorderSide(
                   color: isSolved && isCorrect
                       ? Colors.green
-                      : AppColors.primary.withOpacity(0.5),
+                      : scheme.primary.withOpacity(0.5),
                 ),
               ),
               onPressed: isSolved
@@ -64,7 +65,7 @@ class ImageChoiceWidget extends StatelessWidget {
                         height: 60,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: AppColors.backgroundBlack.withOpacity(0.1),
+                          color: scheme.surface.withOpacity(0.5),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
@@ -99,6 +100,7 @@ class TranslatePickerWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final options = ((cardData['options'] as List?) ?? [])
         .map((e) => e.toString())
         .toList();
@@ -109,7 +111,7 @@ class TranslatePickerWidget extends StatelessWidget {
       children: [
         Text(
           cardData['question']?.toString() ?? 'Select the correct translation',
-          style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
+          style: TextStyle(color: scheme.onSurface, fontSize: 16),
         ),
         const SizedBox(height: 16),
         Wrap(
@@ -122,7 +124,7 @@ class TranslatePickerWidget extends StatelessWidget {
               selected: isSolved && isCorrect,
               selectedColor: Colors.green.withOpacity(0.2),
               labelStyle: TextStyle(
-                  color: isSolved && isCorrect ? Colors.green : AppColors.textPrimary),
+                  color: isSolved && isCorrect ? Colors.green : scheme.onSurface),
               onSelected: isSolved
                   ? null
                   : (selected) async {
@@ -172,6 +174,7 @@ class _SentenceBuilderWidgetState extends State<SentenceBuilderWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final sentenceToTranslate = widget.cardData['sentence_to_translate']?.toString() ?? '';
     final wordBank = ((widget.cardData['word_bank'] as List?) ?? [])
         .map((e) => e.toString())
@@ -185,12 +188,12 @@ class _SentenceBuilderWidgetState extends State<SentenceBuilderWidget> {
       children: [
         Text(
           widget.cardData['question']?.toString() ?? 'Translate this sentence',
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+          style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 14),
         ),
         const SizedBox(height: 8),
         Text(
            sentenceToTranslate,
-           style: const TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
+           style: TextStyle(color: scheme.onSurface, fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 20),
         
@@ -200,9 +203,9 @@ class _SentenceBuilderWidgetState extends State<SentenceBuilderWidget> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-                color: AppColors.surfaceElevated,
+                color: scheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.primary.withOpacity(0.3))
+                border: Border.all(color: scheme.primary.withOpacity(0.3))
             ),
             child: Wrap(
                 spacing: 8,
@@ -238,9 +241,9 @@ class _SentenceBuilderWidgetState extends State<SentenceBuilderWidget> {
 
                 return ActionChip(
                     label: Text(word),
-                    backgroundColor: isAvailable ? AppColors.surfaceElevated : Colors.transparent,
-                    side: BorderSide(color: isAvailable ? AppColors.primary : Colors.grey.withOpacity(0.3)),
-                    labelStyle: TextStyle(color: isAvailable ? AppColors.textPrimary : Colors.grey),
+                    backgroundColor: isAvailable ? scheme.surfaceContainerHighest : Colors.transparent,
+                    side: BorderSide(color: isAvailable ? scheme.primary : Colors.grey.withOpacity(0.3)),
+                    labelStyle: TextStyle(color: isAvailable ? scheme.onSurface : Colors.grey),
                     onPressed: (widget.isSolved || !isAvailable) ? null : () async {
                          await widget.onPlayAudio(word);
                          setState(() {

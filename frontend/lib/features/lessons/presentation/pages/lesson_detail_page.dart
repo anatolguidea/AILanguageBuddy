@@ -4,6 +4,8 @@ import 'package:flutter_sound/flutter_sound.dart';
 
 import 'dart:typed_data';
 import '../../../../theme/app_colors.dart';
+import '../../../../core/l10n/app_strings.dart';
+import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
 import '../../domain/entities/lesson.dart';
 import '../providers/lessons_provider.dart';
 import '../../data/lessons_repository.dart';
@@ -55,15 +57,16 @@ class _LessonDetailPageState extends ConsumerState<LessonDetailPage> {
       ref.invalidate(lessonsProvider);
       if (mounted) {
         setState(() => _isCompleted = true);
+        final s = AppStrings.forLocale(ref.read(appLocaleProvider));
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Lesson completed and progress saved!')),
+          SnackBar(content: Text(s.lessonCompletedAndSaved)),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ).showSnackBar(SnackBar(content: Text('${AppStrings.forLocale(ref.read(appLocaleProvider)).error}: $e')));
       }
     } finally {
       if (mounted) setState(() => _isCompleting = false);
@@ -108,21 +111,23 @@ class _LessonDetailPageState extends ConsumerState<LessonDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final locale = ref.watch(appLocaleProvider);
+    final s = AppStrings.forLocale(locale);
     // Backend now returns 'challenges', but we support 'cards' for backward compat or if map differs.
     final List<dynamic> challengesRaw = (widget.lesson.content['challenges'] as List?) ?? 
                                         (widget.lesson.content['cards'] as List?) ?? [];
     
     return Scaffold(
-      backgroundColor: AppColors.backgroundBlack,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(widget.lesson.title),
         backgroundColor: Colors.transparent,
       ),
       body: challengesRaw.isEmpty
-          ? const Center(
+          ? Center(
               child: Text(
-                'No interactive content found.',
-                style: TextStyle(color: AppColors.textPrimary),
+                s.noInteractiveContent,
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
               ),
             )
           : ListView.builder(
@@ -136,12 +141,12 @@ class _LessonDetailPageState extends ConsumerState<LessonDetailPage> {
                     child: Center(
                       child: Text(
                         _isCompleted
-                            ? 'Lesson Completed!'
+                            ? s.lessonCompleted
                             : _isCompleting
-                            ? 'Saving...'
-                            : 'Progress: $solved/${challengesRaw.length}',
+                            ? s.saving
+                            : '${s.progress}: $solved/${challengesRaw.length}',
                         style: TextStyle(
-                            color: _isCompleted ? Colors.green : AppColors.textSecondary,
+                            color: _isCompleted ? Colors.green : Theme.of(context).colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.bold
                         ),
                       ),
@@ -154,7 +159,7 @@ class _LessonDetailPageState extends ConsumerState<LessonDetailPage> {
                 final isSolved = _solvedChallengeIndexes.contains(index);
 
                 return Card(
-                  color: AppColors.surfaceElevated,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   margin: const EdgeInsets.only(bottom: 24),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   child: Padding(
@@ -166,9 +171,9 @@ class _LessonDetailPageState extends ConsumerState<LessonDetailPage> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                                 Text(
-                                  'Challenge ${index + 1}',
-                                  style: const TextStyle(
-                                    color: AppColors.textSecondary,
+                                  '${s.challenge} ${index + 1}',
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold
                                   ),
@@ -204,7 +209,7 @@ class _LessonDetailPageState extends ConsumerState<LessonDetailPage> {
                         else
                              Text(
                                 "Unknown challenge type: $type",
-                                style: const TextStyle(color: AppColors.error),
+                                style: TextStyle(color: Theme.of(context).colorScheme.error),
                              )
                       ],
                     ),

@@ -8,6 +8,12 @@ public record ChatMessageDto(
         String content,
         String role,
         LocalDateTime createdAt,
-        UUID userId
-) {}
+        UUID userId,
+        String correction,
+        String tips
+) {
+    public ChatMessageDto(Long id, String content, String role, LocalDateTime createdAt, UUID userId) {
+        this(id, content, role, createdAt, userId, null, null);
+    }
+}
 

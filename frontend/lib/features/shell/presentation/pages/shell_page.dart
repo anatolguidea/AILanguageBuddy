@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import '../../../../theme/app_colors.dart';
 
-class ShellPage extends StatelessWidget {
+import 'package:ailanguageapp/core/l10n/app_strings.dart';
+import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
+
+class ShellPage extends ConsumerWidget {
   final StatefulNavigationShell navigationShell;
 
   const ShellPage({
@@ -11,7 +14,7 @@ class ShellPage extends StatelessWidget {
     super.key,
   });
 
-  void _goBranch(int index) {
+  void _goBranch(StatefulNavigationShell navigationShell, int index) {
     navigationShell.goBranch(
       index,
       initialLocation: index == navigationShell.currentIndex,
@@ -19,37 +22,40 @@ class ShellPage extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final locale = ref.watch(appLocaleProvider);
+    final s = AppStrings.forLocale(locale);
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: navigationShell,
       bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           border: Border(
-            top: BorderSide(color: AppColors.surfaceElevated, width: 1),
+            top: BorderSide(color: colorScheme.surfaceContainerHighest, width: 1),
           ),
         ),
         child: NavigationBar(
           selectedIndex: navigationShell.currentIndex,
-          onDestinationSelected: _goBranch,
-          backgroundColor: AppColors.backgroundBlack,
-          indicatorColor: AppColors.surfaceElevated,
+          onDestinationSelected: (index) => _goBranch(navigationShell, index),
+          backgroundColor: colorScheme.surface,
+          indicatorColor: colorScheme.surfaceContainerHighest,
           height: 60,
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: const [
+          destinations: [
             NavigationDestination(
-              icon: FaIcon(FontAwesomeIcons.chalkboard, size: 20, color: AppColors.textSecondary),
-              selectedIcon: FaIcon(FontAwesomeIcons.chalkboardUser, size: 20, color: AppColors.primary),
-              label: 'Lessons',
+              icon: FaIcon(FontAwesomeIcons.chalkboard, size: 20, color: colorScheme.onSurfaceVariant),
+              selectedIcon: FaIcon(FontAwesomeIcons.chalkboardUser, size: 20, color: colorScheme.primary),
+              label: s.lessons,
             ),
             NavigationDestination(
-              icon: FaIcon(FontAwesomeIcons.dumbbell, size: 20, color: AppColors.textSecondary),
-              selectedIcon: FaIcon(FontAwesomeIcons.dumbbell, size: 20, color: AppColors.primary),
-              label: 'Practice',
+              icon: FaIcon(FontAwesomeIcons.dumbbell, size: 20, color: colorScheme.onSurfaceVariant),
+              selectedIcon: FaIcon(FontAwesomeIcons.dumbbell, size: 20, color: colorScheme.primary),
+              label: s.practice,
             ),
             NavigationDestination(
-              icon: FaIcon(FontAwesomeIcons.user, size: 20, color: AppColors.textSecondary),
-              selectedIcon: FaIcon(FontAwesomeIcons.solidUser, size: 20, color: AppColors.primary),
-              label: 'Profile',
+              icon: FaIcon(FontAwesomeIcons.user, size: 20, color: colorScheme.onSurfaceVariant),
+              selectedIcon: FaIcon(FontAwesomeIcons.solidUser, size: 20, color: colorScheme.primary),
+              label: s.profile,
             ),
           ],
         ),

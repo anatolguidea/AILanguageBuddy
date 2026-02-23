@@ -6,22 +6,28 @@ import '../../../../theme/app_colors.dart';
 class PracticeHeader extends StatelessWidget {
   final int streakCount;
   final VoidCallback? onUpgrade;
+  final String title;
+  final String upgradeLabel;
 
   const PracticeHeader({
     super.key,
     this.streakCount = 0,
     this.onUpgrade,
+    this.title = 'Practice',
+    this.upgradeLabel = 'Upgrade',
   });
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          'Practice',
-          style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                color: AppColors.textPrimary,
+          title,
+          style: textTheme.displayMedium?.copyWith(
+                color: scheme.onSurface,
                 fontWeight: FontWeight.bold,
               ),
         ),
@@ -32,7 +38,7 @@ class PracticeHeader extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(right: 10),
                 child: Material(
-                  color: AppColors.primary,
+                  color: scheme.primary,
                   borderRadius: BorderRadius.circular(20),
                   child: InkWell(
                     onTap: onUpgrade,
@@ -42,12 +48,12 @@ class PracticeHeader extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.star_rounded, color: Colors.white, size: 20),
+                          Icon(Icons.star_rounded, color: scheme.onPrimary, size: 20),
                           const SizedBox(width: 6),
                           Text(
-                            'Upgrade',
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                  color: Colors.white,
+                            upgradeLabel,
+                            style: textTheme.titleSmall?.copyWith(
+                                  color: scheme.onPrimary,
                                   fontWeight: FontWeight.w600,
                                 ),
                           ),

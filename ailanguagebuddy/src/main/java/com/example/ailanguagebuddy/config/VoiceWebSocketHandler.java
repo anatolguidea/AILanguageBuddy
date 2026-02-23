@@ -118,7 +118,7 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
                 return;
             }
 
-            LearningContext context = new LearningContext("English", "A1", "General Conversation", VOICE_LIVE_MODE);
+            LearningContext context = new LearningContext("English", "A1", "General Conversation", VOICE_LIVE_MODE, "en");
             AiTutorResult aiResult = chatService.askLanguageCoach(transcribedText, userId, context);
             String aiReply = aiResult.replyText();
             System.out.println("AI Reply: " + aiReply);
