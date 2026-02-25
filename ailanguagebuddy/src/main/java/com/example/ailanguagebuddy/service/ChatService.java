@@ -45,24 +45,35 @@ public class ChatService {
 
     /**
      * Sends the message to Groq and persists user/assistant messages for the given
-     * user.
-     * Returns a structured result that includes corrections and vocabulary when
-     * available.
+     * user (except in VOICE_LIVE mode, where history is session-only and not persisted).
+     * For VOICE_LIVE, pass the in-memory session history as voiceSessionHistory; when the
+     * voice screen is closed, that history is discarded.
      */
     @Transactional
     public AiTutorResult askLanguageCoach(String userMessage, UUID userId, LearningContext context) {
+        return askLanguageCoach(userMessage, userId, context, null);
+    }
+
+    @Transactional
+    public AiTutorResult askLanguageCoach(String userMessage, UUID userId, LearningContext context, String voiceSessionHistory) {
         try {
             String mode = (context != null && context.mode() != null && !context.mode().isBlank())
                     ? context.mode()
                     : "general";
-            String historyBlock = buildHistoryBlockForPrompt(userId, mode, PROMPT_HISTORY_LIMIT);
+            // Voice live: use in-memory session history (when non-null). Same prompt as chat; no persistence for voice.
+            boolean isVoiceCall = (voiceSessionHistory != null);
+            String historyBlock = isVoiceCall
+                    ? (voiceSessionHistory != null ? voiceSessionHistory : "")
+                    : buildHistoryBlockForPrompt(userId, mode, PROMPT_HISTORY_LIMIT);
             var systemInstructions = new SystemMessage(
                     promptBuilder.buildSystemPrompt(context, historyBlock, userMessage));
             var userMsg = new UserMessage(userMessage);
             Prompt prompt = new Prompt(List.of(systemInstructions, userMsg));
 
-            // Save user message with mode and flush immediately.
-            repository.saveAndFlush(new ChatMessage(userMessage, "user", userId, mode));
+            // Persist only for chat; voice uses session history and does not persist
+            if (!isVoiceCall) {
+                repository.saveAndFlush(new ChatMessage(userMessage, "user", userId, mode));
+            }
 
             String rawResponse = chatModel.call(prompt)
                     .getResult()
@@ -71,14 +82,28 @@ public class ChatService {
 
             AiTutorResult result = parseTutorResult(rawResponse);
 
-            // Persist assistant message with feedback metadata (correction, tips).
-            repository.saveAndFlush(new ChatMessage(
-                    result.replyText(),
-                    "assistant",
-                    userId,
-                    mode,
-                    result.correction(),
-                    result.tips()));
+            // Voice call + non-English target: if the model replied in English, force-translate to target
+            if (isVoiceCall && context != null) {
+                String target = context.targetLanguage();
+                if (target != null && !target.isBlank() && !"English".equalsIgnoreCase(target.trim())
+                        && isLikelyEnglishReply(result.replyText())) {
+                    String translated = translateReplyToTarget(result.replyText(), target);
+                    if (translated != null && !translated.isBlank()) {
+                        log.debug("Voice: translated reply from English to {}: {} -> {}", target, result.replyText(), translated);
+                        result = new AiTutorResult(translated, result.correction(), result.tips());
+                    }
+                }
+            }
+
+            if (!isVoiceCall) {
+                repository.saveAndFlush(new ChatMessage(
+                        result.replyText(),
+                        "assistant",
+                        userId,
+                        mode,
+                        result.correction(),
+                        result.tips()));
+            }
             return result;
         } catch (Exception e) {
             throw new RuntimeException("AI request failed", e);
@@ -175,6 +200,42 @@ public class ChatService {
         }
 
         return new AiTutorResult(raw, null, null, List.of(), List.of());
+    }
+
+    /** Heuristic: reply looks like English (common greetings/phrases). Used to trigger translation for voice. */
+    private static boolean isLikelyEnglishReply(String text) {
+        if (text == null || text.isBlank()) return false;
+        String lower = text.trim().toLowerCase();
+        if (lower.startsWith("hello") || lower.startsWith("hi ") || lower.startsWith("hi!")
+                || lower.startsWith("how are you") || lower.startsWith("good morning")
+                || lower.startsWith("good afternoon") || lower.startsWith("good evening")
+                || lower.startsWith("nice to meet") || lower.startsWith("thanks ")
+                || lower.startsWith("thank you") || lower.startsWith("good to talk")
+                || lower.startsWith("how's your day") || lower.contains("how are you today")
+                || lower.contains("it seems like") || lower.contains("could you tell me")
+                || lower.contains("i think you might") || lower.contains("what's on your mind")) {
+            return true;
+        }
+        return false;
+    }
+
+    /** Single LLM call: translate the reply to the target language. Used when voice model replied in English. */
+    private String translateReplyToTarget(String replyText, String targetLanguageDisplayName) {
+        if (replyText == null || replyText.isBlank() || targetLanguageDisplayName == null || targetLanguageDisplayName.isBlank()) {
+            return replyText;
+        }
+        try {
+            String systemPrompt = "You are a translator. Translate the following English text to " + targetLanguageDisplayName + ". "
+                    + "Output ONLY the translation, nothing else. No quotes, no explanation. Keep the same tone (friendly, conversational).";
+            Prompt prompt = new Prompt(List.of(
+                    new SystemMessage(systemPrompt),
+                    new UserMessage(replyText)));
+            String out = chatModel.call(prompt).getResult().getOutput().getText();
+            return out != null ? out.trim() : replyText;
+        } catch (Exception e) {
+            log.warn("Translation to {} failed, using original reply: {}", targetLanguageDisplayName, e.getMessage());
+            return replyText;
+        }
     }
 
     @Transactional

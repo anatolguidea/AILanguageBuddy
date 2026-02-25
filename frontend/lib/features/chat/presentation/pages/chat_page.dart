@@ -8,7 +8,9 @@ import '../widgets/chat_bubble.dart';
 import '../widgets/chat_input_bar.dart';
 import '../providers/chat_provider.dart';
 import '../../../settings/presentation/providers/language_provider.dart';
+import '../providers/current_topic_language_provider.dart';
 import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
+import '../../../settings/domain/entities/language.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
   final String scenarioId;
@@ -29,9 +31,26 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     Future.microtask(() {
       final notifier = ref.read(chatProvider.notifier);
       notifier.clearMessages();
-      final lang = ref.read(languageProvider);
-      notifier.loadHistory(widget.scenarioId, targetLanguage: lang.name);
+      final code = ref.read(currentTopicLanguageProvider) ?? ref.read(languageProvider).code;
+      final lang = _languageFromCode(code);
+      final sessionMode = '${widget.scenarioId}_${lang.code}';
+      notifier.loadHistory(sessionMode, targetLanguage: lang.name);
     });
+  }
+
+  static Language _languageFromCode(String? code) {
+    final c = (code ?? 'en').trim().toLowerCase();
+    final normalized = c == 'e' || c.isEmpty
+        ? 'en'
+        : c == 'f'
+            ? 'fr'
+            : c.length >= 2
+                ? c.split('-').first
+                : 'en';
+    return Language.supported.firstWhere(
+      (l) => l.code == normalized,
+      orElse: () => Language.supported.first,
+    );
   }
 
   @override
@@ -53,12 +72,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   void _sendMessage() {
     if (_messageController.text.trim().isEmpty) return;
-    
-    final currentLanguage = ref.read(languageProvider);
+    final code = ref.read(currentTopicLanguageProvider) ?? ref.read(languageProvider).code;
+    final lang = _languageFromCode(code);
+    final sessionMode = '${widget.scenarioId}_${lang.code}';
     ref.read(chatProvider.notifier).sendMessage(
-      _messageController.text, 
-      widget.scenarioId,
-      currentLanguage.name, 
+      _messageController.text,
+      sessionMode,
+      lang.name,
     );
     _messageController.clear();
     // Scroll will be handled by listener or post-build
@@ -126,9 +146,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 ? null
                 : () async {
                     final notifier = ref.read(chatProvider.notifier);
-                    final lang = ref.read(languageProvider);
+                    final code = ref.read(currentTopicLanguageProvider) ?? ref.read(languageProvider).code;
+                    final lang = _languageFromCode(code);
+                    final sessionMode = '${widget.scenarioId}_${lang.code}';
                     await notifier.deleteHistoryAndRestart(
-                      widget.scenarioId,
+                      sessionMode,
                       targetLanguage: lang.name,
                     );
                     if (context.mounted) {

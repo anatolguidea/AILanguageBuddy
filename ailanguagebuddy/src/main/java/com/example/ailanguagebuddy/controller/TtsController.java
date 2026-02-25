@@ -24,8 +24,11 @@ public class TtsController {
         if (jwt == null) {
             return ResponseEntity.status(401).build();
         }
-
-        var tts = voiceServiceClient.synthesizeInstant(payload.text(), payload.language());
+        // Prefer languageCode (2-letter), fallback to language (e.g. "en", "ro")
+        String lang = (payload.languageCode() != null && !payload.languageCode().isBlank())
+                ? payload.languageCode()
+                : payload.language();
+        var tts = voiceServiceClient.synthesizeInstant(payload.text(), lang);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_TYPE, tts.mediaType())
                 .header("X-Audio-Codec", tts.codec())
@@ -33,6 +36,10 @@ public class TtsController {
                 .body(tts.audioBytes());
     }
 
-    public record SpeakPayload(String text, String language) {
+    /** text: only the reply content (not correction/tips). language/languageCode: 2-letter code for voice. */
+    public record SpeakPayload(String text, String language, String languageCode) {
+        public SpeakPayload(String text, String language) {
+            this(text, language, null);
+        }
     }
 }

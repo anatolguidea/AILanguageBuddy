@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:ailanguageapp/core/l10n/app_strings.dart';
+import 'package:ailanguageapp/features/chat/presentation/pages/live_speech_page.dart';
 import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
 
 class ShellPage extends ConsumerWidget {
@@ -26,6 +27,8 @@ class ShellPage extends ConsumerWidget {
     final locale = ref.watch(appLocaleProvider);
     final s = AppStrings.forLocale(locale);
     final colorScheme = Theme.of(context).colorScheme;
+    // Keep voice WS in sync with lesson-screen language: reconnect when user switches language
+    ref.watch(voiceReconnectOnLanguageChangeProvider);
     return Scaffold(
       body: navigationShell,
       bottomNavigationBar: Container(

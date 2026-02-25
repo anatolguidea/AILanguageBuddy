@@ -33,14 +33,20 @@ public class PromptBuilder {
                 : historyFromSupabase;
         String safeCurrent = (currentMessage == null || currentMessage.isBlank()) ? "(empty input)" : currentMessage;
         String liveVoiceInstruction = "VOICE_LIVE".equalsIgnoreCase(mode)
-                ? "You are currently in LIVE VOICE mode. Your context is limited to the current vocal exchange."
+                ? ("You are in LIVE VOICE mode. The user is speaking in " + target + ". You MUST reply ONLY in " + target + ". Do not reply in English unless the target language is English. Example: if target is French and the user says 'Bonjour', reply in French (e.g. 'Bonjour ! Comment allez-vous ?'), never in English.")
+                : "";
+        // For voice mode, prepend an unambiguous output-language line so the model cannot miss it.
+        String outputLanguageBanner = "VOICE_LIVE".equalsIgnoreCase(mode)
+                ? ("OUTPUT_LANGUAGE: " + target + ". Your \"reply\" field must be written entirely in " + target + ". Do not use English unless the target is English.\n\n")
                 : "";
         String instructionLanguageRule = instructionRo
                 ? "The learner's app is in Romanian. Write the \"correction\" and \"tips\" fields in Romanian (e.g. explain grammar/vocabulary in Romanian). Use Romanian for any meta-instructions."
                 : "";
 
-        return """
-            Role: You are a supportive language tutor named Sarah. You correct gently and give brief tips.
+        return outputLanguageBanner + """
+            Role: You are Sarah, a warm and encouraging language tutor. You correct gently, give brief tips, and keep the conversation going like a supportive teacher. Sound natural but a bit more expansive than one-line answers.
+
+            CRITICAL - Language consistency: If the target language is English, you MUST respond ONLY in English. Do not use words from other languages (e.g. do not say "Bonjour", "Hola", "Ciao") in your reply unless the user explicitly asks for a translation. If the target language is French, reply ONLY in French. Same for any other target language: your entire "reply" must be in that language only.
 
             Available topics (current conversation topic: %s):
             %s
@@ -49,7 +55,7 @@ public class PromptBuilder {
             Conversation History:
             %s
 
-            Current User Input:
+            Current User Input (reply in %s):
             %s
 
             Learner profile:
@@ -60,16 +66,17 @@ public class PromptBuilder {
             Instructions:
             - %s
             - Use the history to resolve pronouns.
-            - Keep your spoken reply SHORT and natural (max 25 words).
+            - Reply in a tutor style: acknowledge what they said, add a short encouraging or clarifying sentence, and optionally ask a follow-up question or suggest something to talk about. Aim for 2–4 sentences (about 40–55 words). Keep it natural and conversational, not robotic.
             - If the user made grammar/vocabulary mistakes, provide the corrected version and a brief tip.
             - Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
             {"reply": "your spoken reply in the target language", "correction": "corrected version of user's last message or empty string if no errors", "tips": "brief grammar or vocabulary tip or empty string"}
 
+            - "reply" must be ONLY in the target language (%s). Do not mix languages. For voice mode, never reply in English when the target is another language.
             - "correction" must be the full corrected sentence of the user's last message, or "" if no correction needed.
             - "tips" must be one short sentence (e.g. Use "went" for past tense of "go"). Use double quotes for examples; avoid backslash-escaping. Use "" if no tip.
             %s
-            """.formatted(mode, topicsBlock, topicInstruction, safeHistory, safeCurrent, target, nativeLang, level, liveVoiceInstruction,
-                    instructionLanguageRule.isBlank() ? "" : "\n" + instructionLanguageRule);
+            """.formatted(mode, topicsBlock, topicInstruction, safeHistory, target, safeCurrent, target, nativeLang, level, liveVoiceInstruction,
+                    target, instructionLanguageRule.isBlank() ? "" : "\n" + instructionLanguageRule);
     }
 
     /** Prompt for generating the first message when the user opens a topic with no history. */
@@ -85,13 +92,15 @@ public class PromptBuilder {
                 .orElse("You are a supportive language tutor.");
 
         return """
-            Role: You are a supportive language tutor named Sarah. Start the conversation for this topic.
+            Role: You are Sarah, a warm and encouraging language tutor. Start the conversation in a friendly, tutor-like way.
+
+            CRITICAL: Reply ONLY in the target language. Do not mix in words from other languages (e.g. no "Bonjour" in an English reply).
 
             Topic: %s. Context: %s
 
             Learner: target language=%s (REPLY ONLY IN THIS LANGUAGE), native=%s (do NOT use this in your reply), level=%s.
 
-            There is no prior history. Write a short, friendly first message to start the conversation (e.g. ask a question or suggest something to talk about). Keep it under 20 words and spoken-style. Your entire reply MUST be in the target language (%s) only.
+            There is no prior history. Write a friendly first message as a tutor would: greet them, briefly say what you can do together for this topic, and ask a first question or suggest something to try. Use 2–3 sentences (about 30–45 words). Warm and inviting, not one-line. Your entire reply MUST be in the target language (%s) only.
 
             Respond ONLY with valid JSON: {"reply": "your first message in target language", "correction": "", "tips": ""}
             """.formatted(mode, topicInstruction, target, nativeLang, level, target);

@@ -34,8 +34,9 @@ class LanguageNotifier extends StateNotifier<Language> {
           .select('target_language')
           .eq('id', userId)
           .maybeSingle();
-      final code = (data?['target_language'] as String?)?.toLowerCase();
-      if (code == null || code.isEmpty) return;
+      final raw = (data?['target_language'] as String?)?.toLowerCase().trim();
+      if (raw == null || raw.isEmpty) return;
+      final code = _normalizeLanguageCode(raw);
       final matching = Language.supported.where((l) => l.code == code);
       if (matching.isNotEmpty) {
         state = matching.first;
@@ -43,6 +44,13 @@ class LanguageNotifier extends StateNotifier<Language> {
     } catch (_) {
       // keep current language if profile data is unavailable
     }
+  }
+
+  static String _normalizeLanguageCode(String v) {
+    if (v == 'e') return 'en';
+    if (v == 'f') return 'fr';
+    if (v.length >= 2) return v.split('-').first;
+    return v;
   }
 
   Future<void> _persistToProfile(String code) async {

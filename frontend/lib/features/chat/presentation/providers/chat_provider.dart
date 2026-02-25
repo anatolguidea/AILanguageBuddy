@@ -10,6 +10,7 @@ import '../../data/models/chat_models.dart';
 import '../../../../core/config.dart';
 import '../../../settings/presentation/providers/language_provider.dart';
 import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
+import 'current_topic_language_provider.dart';
 import 'session_topic_tracker.dart';
 
 // Constants
@@ -121,12 +122,14 @@ class ChatNotifier extends StateNotifier<ChatState> {
     state = state.copyWith(isListening: false);
   }
 
+  /// Speaks [text] via backend TTS. Only pass the AI reply content (not correction/tips).
+  /// Uses current topic language code so voice accent matches the conversation.
   Future<void> speak(String text) async {
     if (text.trim().isEmpty) return;
     state = state.copyWith(isSpeaking: true);
     try {
-      final langCode = _ref.read(languageProvider).code;
-      final played = await _playBackendTts(text, langCode);
+      final code = _ref.read(currentTopicLanguageProvider) ?? _ref.read(languageProvider).code;
+      final played = await _playBackendTts(text, code);
       if (!played) await _flutterTts.speak(text);
     } catch (_) {
       await _flutterTts.speak(text);
@@ -135,7 +138,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
+  /// POST to backend TTS. [languageCode] must be 2-letter (en, ro, es) for correct accent.
   Future<bool> _playBackendTts(String text, String languageCode) async {
+    // Ensure we never send shorthand "e" (backend maps it, but send "en" for consistency)
+    final lang = languageCode.trim().toLowerCase();
+    final code = (lang == 'e' || lang.isEmpty) ? 'en' : lang;
     try {
       final token = Supabase.instance.client.auth.currentSession?.accessToken;
       if (token == null) return false;
@@ -146,7 +153,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({'text': text, 'language': languageCode}),
+        body: jsonEncode({
+          'text': text,
+          'language': code,
+          'languageCode': code,
+        }),
       ).timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return false;
       final bytes = response.bodyBytes;

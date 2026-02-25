@@ -16,7 +16,7 @@ public class VoiceServiceClient {
         this.restClient = builder.baseUrl("http://localhost:8000").build();
     }
 
-    public String transcribe(byte[] audioData) {
+    public String transcribe(byte[] audioData, String languageCode) {
         try {
             // Create a temporary resource for the byte array
             org.springframework.core.io.ByteArrayResource resource = new org.springframework.core.io.ByteArrayResource(
@@ -34,8 +34,9 @@ public class VoiceServiceClient {
             // Use Spring's RestClient to send multipart request
             // Note: Requires spring-web config for multipart converters, usually default in
             // Boot
+            String lang = (languageCode == null || languageCode.isBlank()) ? "en" : languageCode;
             TranscriptionResponse response = restClient.post()
-                    .uri("/transcribe")
+                    .uri("/transcribe?language=" + lang)
                     .contentType(MediaType.MULTIPART_FORM_DATA)
                     .body(body)
                     .retrieve()

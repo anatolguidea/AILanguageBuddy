@@ -30,7 +30,8 @@ public class TopicConfigService {
                 list.add(new TopicEntry(
                         node.path("id").asText(),
                         node.path("title").asText(),
-                        node.path("instruction").asText()));
+                        node.path("instruction").asText(),
+                        node.has("languageCode") ? node.path("languageCode").asText("en") : "en"));
             }
             this.topics = List.copyOf(list);
         } catch (Exception e) {
@@ -59,5 +60,9 @@ public class TopicConfigService {
         return sb.toString();
     }
 
-    public record TopicEntry(String id, String title, String instruction) {}
+    public record TopicEntry(String id, String title, String instruction, String languageCode) {
+        public TopicEntry(String id, String title, String instruction) {
+            this(id, title, instruction, "en");
+        }
+    }
 }

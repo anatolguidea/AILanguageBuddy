@@ -57,7 +57,11 @@ class LessonsRepository {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       },
-      body: jsonEncode({'text': text, 'language': languageCode}),
+      body: jsonEncode({
+        'text': text,
+        'language': languageCode,
+        'languageCode': languageCode,
+      }),
     );
 
     if (response.statusCode != 200) {

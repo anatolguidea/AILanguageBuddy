@@ -7,7 +7,8 @@ import '../domain/entities/topic.dart';
 import 'topic_translations.dart';
 
 abstract class TopicRepository {
-  Future<List<Topic>> getTopics(String languageCode);
+  /// [languageCodeForTitles] = UI locale; [targetLanguageCode] = conversation/TTS (en, ro, fr).
+  Future<List<Topic>> getTopics(String languageCodeForTitles, String targetLanguageCode);
 }
 
 /// Topic id -> icon and route. Title comes from topic_translations.
@@ -45,9 +46,10 @@ const List<({String id, IconData icon})> kTopicConfigs = [
 
 class MockTopicRepository implements TopicRepository {
   @override
-  Future<List<Topic>> getTopics(String languageCode) async {
+  Future<List<Topic>> getTopics(String languageCodeForTitles, String targetLanguageCode) async {
     await Future.delayed(const Duration(milliseconds: 150));
-    final lang = languageCode.toLowerCase().split('-').first;
+    final lang = languageCodeForTitles.toLowerCase().split('-').first;
+    final code = _normalizeTargetCode(targetLanguageCode);
     return kTopicConfigs.map((config) {
       final translations = kTopicTranslations[config.id];
       final title = translations?[lang] ?? translations?['en'] ?? config.id;
@@ -56,8 +58,24 @@ class MockTopicRepository implements TopicRepository {
         title: title,
         icon: config.icon,
         route: '/chat/${config.id}',
+        languageCode: code,
       );
     }).toList();
+  }
+
+  static String _normalizeTargetCode(String v) {
+    final c = v.trim().toLowerCase();
+    if (c.isEmpty || c == 'e') return 'en';
+    if (c.length == 1) {
+      switch (c) {
+        case 'f': return 'fr';
+        case 's': return 'es';
+        case 'r': return 'ro';
+        case 'd': return 'de';
+        default: return 'en';
+      }
+    }
+    return c.split('-').first;
   }
 }
 
@@ -68,5 +86,6 @@ final topicRepositoryProvider = Provider<TopicRepository>((ref) {
 final topicsProvider = FutureProvider<List<Topic>>((ref) async {
   final repository = ref.watch(topicRepositoryProvider);
   final locale = ref.watch(appLocaleProvider);
-  return repository.getTopics(locale);
+  final targetCode = ref.watch(languageProvider).code;
+  return repository.getTopics(locale, targetCode);
 });

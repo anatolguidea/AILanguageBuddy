@@ -13,10 +13,11 @@ import org.springframework.web.socket.handler.BinaryWebSocketHandler;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList;
+import java.util.List;
 
 @Component
 public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
-    private static final String VOICE_LIVE_MODE = "VOICE_LIVE";
 
     private final VoiceServiceClient voiceService;
     private final ChatService chatService;
@@ -36,27 +37,40 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
     // Buffer to accumulate audio chunks
     private final ConcurrentHashMap<String, java.io.ByteArrayOutputStream> sessionAudioBuffers = new ConcurrentHashMap<>();
 
+    /** In-memory conversation history per voice session. Cleared when the WebSocket closes (screen closed). */
+    private static final int VOICE_HISTORY_LIMIT = 10; // max exchanges (user + assistant = 2 lines each)
+    private final ConcurrentHashMap<String, List<String>> sessionVoiceHistory = new ConcurrentHashMap<>();
+
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         System.out.println("Voice WS Connected: " + session.getId());
 
-        // Extract userId from query params
-        // Expected URI: /ws/voice?userId=...
+        // Extract userId and targetLanguage from query params
+        // Expected URI: /ws/voice?userId=...&targetLanguage=es
         String query = session.getUri().getQuery();
         UUID userId = null;
-        if (query != null && query.contains("userId=")) {
-            String[] parts = query.split("userId=");
-            if (parts.length > 1) {
-                String idStr = parts[1].split("&")[0];
-                try {
-                    userId = UUID.fromString(idStr);
-                    session.getAttributes().put("userId", userId);
-                    System.out.println("User ID identified: " + userId);
-                } catch (IllegalArgumentException e) {
-                    System.err.println("Invalid User ID format: " + idStr);
+        String targetLanguageCode = "en";
+        // Always store normalized code so LLM and TTS use the same language
+        if (query != null) {
+            for (String param : query.split("&")) {
+                if (param.startsWith("userId=")) {
+                    String idStr = param.substring(7).split("&")[0];
+                    try {
+                        userId = UUID.fromString(idStr);
+                        session.getAttributes().put("userId", userId);
+                        System.out.println("User ID identified: " + userId);
+                    } catch (IllegalArgumentException e) {
+                        System.err.println("Invalid User ID format: " + idStr);
+                    }
+                } else if (param.startsWith("targetLanguage=")) {
+                    String raw = param.substring(14).split("&")[0].trim();
+                    if (raw.isEmpty()) raw = "en";
+                    targetLanguageCode = normalizeLanguageCode(raw);
+                    session.getAttributes().put("targetLanguageCode", targetLanguageCode);
                 }
             }
         }
+        session.getAttributes().put("targetLanguageCode", targetLanguageCode);
 
         if (userId == null) {
             System.err.println("Warning: No valid userId found in connection request.");
@@ -64,7 +78,15 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
 
         // Initialize buffer
         sessionAudioBuffers.put(session.getId(), new java.io.ByteArrayOutputStream());
+        sessionVoiceHistory.put(session.getId(), new ArrayList<>());
         session.sendMessage(new TextMessage("CONNECTED"));
+    }
+
+    @Override
+    public void afterConnectionClosed(WebSocketSession session, org.springframework.web.socket.CloseStatus status) throws Exception {
+        // User left the voice screen: clear session history so next time they open voice they start fresh
+        sessionAudioBuffers.remove(session.getId());
+        sessionVoiceHistory.remove(session.getId());
     }
 
     @Override
@@ -100,9 +122,18 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
 
             System.out.println("Processing audio turn: " + completeAudio.length + " bytes");
 
-            // 1. STT (Audio -> Text)
-            // Call real Python STT (Whisper)
-            String transcribedText = voiceService.transcribe(completeAudio);
+            UUID userId = (UUID) session.getAttributes().get("userId");
+            if (userId == null) {
+                session.sendMessage(new TextMessage("ERROR: User ID missing"));
+                return;
+            }
+
+            String targetLanguageCode = normalizeLanguageCode(
+                    (String) session.getAttributes().getOrDefault("targetLanguageCode", "en"));
+            System.out.println("Voice session language: " + targetLanguageCode);
+
+            // 1. STT (Audio -> Text) in the target language
+            String transcribedText = voiceService.transcribe(completeAudio, targetLanguageCode);
 
             System.out.println("User said (STT): " + transcribedText);
 
@@ -112,22 +143,31 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
             }
 
             // 2. LLM (Text -> Text)
-            UUID userId = (UUID) session.getAttributes().get("userId");
-            if (userId == null) {
-                session.sendMessage(new TextMessage("ERROR: User ID missing"));
-                return;
-            }
-
-            LearningContext context = new LearningContext("English", "A1", "General Conversation", VOICE_LIVE_MODE, "en");
-            AiTutorResult aiResult = chatService.askLanguageCoach(transcribedText, userId, context);
+            // Use same LearningContext shape as chat (mode=general) so the LLM gets the exact same prompt as chat messages
+            LearningContext context = new LearningContext(
+                    toDisplayName(targetLanguageCode),
+                    "English",
+                    "A1",
+                    "general",
+                    "en");
+            // Use in-memory session history only (cleared when socket closes)
+            String voiceHistoryBlock = buildSessionHistoryBlock(session.getId());
+            AiTutorResult aiResult = chatService.askLanguageCoach(transcribedText, userId, context, voiceHistoryBlock);
+            // Only the reply is sent to TTS (not corrections or tips)
             String aiReply = aiResult.replyText();
             System.out.println("AI Reply: " + aiReply);
 
-            // 3. TTS (Text -> Voice)
-            byte[] audioResponse = voiceService.synthesize(aiReply);
+            // Append this turn to session history for next time (same session only)
+            appendToSessionHistory(session.getId(), transcribedText, aiReply);
 
-            // 4. Send Audio back to Client
+            // 3. TTS (Text -> Voice) with language for correct voice
+            var instant = voiceService.synthesizeInstant(aiReply, targetLanguageCode);
+            byte[] audioResponse = instant.audioBytes();
+
+            // 4. Send Audio back to Client (format hint so client can use correct codec)
             if (session.isOpen()) {
+                session.sendMessage(new TextMessage(
+                        "AUDIO:" + instant.codec() + "," + instant.sampleRate()));
                 session.sendMessage(new BinaryMessage(audioResponse));
             }
         } catch (Exception e) {
@@ -138,5 +178,51 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
             } catch (Exception ignored) {
             }
         }
+    }
+
+    private static String toDisplayName(String code) {
+        if (code == null || code.isEmpty()) return "English";
+        return switch (code.toLowerCase()) {
+            case "ro" -> "Romanian";
+            case "es" -> "Spanish";
+            case "fr" -> "French";
+            case "de" -> "German";
+            case "it" -> "Italian";
+            case "pt" -> "Portuguese";
+            case "ru" -> "Russian";
+            case "ja" -> "Japanese";
+            case "zh" -> "Chinese";
+            case "ko" -> "Korean";
+            default -> "English";
+        };
+    }
+
+    private static String normalizeLanguageCode(String raw) {
+        if (raw == null || raw.isBlank()) return "en";
+        String v = raw.trim().toLowerCase();
+        if (v.startsWith("=")) v = v.substring(1).trim();
+        if ("e".equals(v)) return "en";
+        if ("f".equals(v)) return "fr";
+        if (v.length() >= 2) return v.split("-")[0];
+        return "en";
+    }
+
+    private String buildSessionHistoryBlock(String sessionId) {
+        List<String> lines = sessionVoiceHistory.get(sessionId);
+        if (lines == null || lines.isEmpty()) return "";
+        return String.join("\n", lines);
+    }
+
+    private void appendToSessionHistory(String sessionId, String userMessage, String assistantReply) {
+        sessionVoiceHistory.compute(sessionId, (k, list) -> {
+            if (list == null) list = new ArrayList<>();
+            list.add("user: " + (userMessage != null ? userMessage.replace("\n", " ").trim() : ""));
+            list.add("assistant: " + (assistantReply != null ? assistantReply.replace("\n", " ").trim() : ""));
+            // Keep only last N exchanges (2 lines each)
+            while (list.size() > VOICE_HISTORY_LIMIT * 2) {
+                list.remove(0);
+            }
+            return list;
+        });
     }
 }

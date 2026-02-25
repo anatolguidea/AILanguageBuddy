@@ -5,11 +5,13 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../../theme/app_colors.dart';
 import '../../../../core/l10n/app_strings.dart';
 import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
+import '../../../settings/presentation/providers/language_provider.dart';
 import '../../data/topic_repository.dart';
 import '../../domain/entities/custom_topic.dart';
 import '../providers/custom_topics_provider.dart';
 import '../widgets/practice_header.dart';
 import '../widgets/practice_banner.dart';
+import '../../../chat/presentation/providers/current_topic_language_provider.dart';
 import '../widgets/topic_tile.dart';
 
 class PracticePage extends ConsumerStatefulWidget {
@@ -91,7 +93,10 @@ class _PracticePageState extends ConsumerState<PracticePage> {
                             return TopicTile(
                               title: topic.title,
                               icon: topic.icon,
-                              onTap: () => context.push(topic.route),
+                              onTap: () {
+                                ref.read(currentTopicLanguageProvider.notifier).state = topic.languageCode;
+                                context.push(topic.route);
+                              },
                             );
                           },
                         ),
@@ -141,7 +146,10 @@ class _PracticePageState extends ConsumerState<PracticePage> {
                                   return TopicTile(
                                     title: topic.title,
                                     icon: FontAwesomeIcons.lightbulb,
-                                    onTap: () => context.push(topic.route),
+                                    onTap: () {
+                                      ref.read(currentTopicLanguageProvider.notifier).state = ref.read(languageProvider).code;
+                                      context.push(topic.route);
+                                    },
                                   );
                                 },
                               ),

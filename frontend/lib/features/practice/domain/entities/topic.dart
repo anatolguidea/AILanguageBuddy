@@ -6,14 +6,17 @@ class Topic extends Equatable {
   final String title;
   final IconData icon;
   final String route;
+  /// ISO 2-letter code (en, ro, fr) for this topic's conversation and TTS.
+  final String languageCode;
 
   const Topic({
     required this.id,
     required this.title,
     required this.icon,
     required this.route,
+    this.languageCode = 'en',
   });
 
   @override
-  List<Object?> get props => [id, title, icon, route];
+  List<Object?> get props => [id, title, icon, route, languageCode];
 }

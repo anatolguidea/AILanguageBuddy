@@ -12,9 +12,10 @@ import '../../../../theme/app_colors.dart';
 import '../providers/chat_provider.dart';
 import 'package:ailanguageapp/core/l10n/app_strings.dart';
 import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
+import 'package:ailanguageapp/features/settings/presentation/providers/language_provider.dart';
 
 // Helper to convert HTTP URL to WS URL
-String _getWsUrl(String? userId, String? accessToken) {
+String _getWsUrl(String? userId, String? accessToken, String? targetLanguageCode) {
   final uri = Uri.parse(kBaseUrl);
   final scheme = uri.scheme == 'https' ? 'wss' : 'ws';
   final host = uri.host;
@@ -27,14 +28,45 @@ String _getWsUrl(String? userId, String? accessToken) {
   if (accessToken != null && accessToken.isNotEmpty) {
     query.add('token=$accessToken');
   }
+  if (targetLanguageCode != null && targetLanguageCode.isNotEmpty) {
+    query.add('targetLanguage=${Uri.encodeComponent(targetLanguageCode)}');
+  }
   if (query.isNotEmpty) {
     url += '?${query.join('&')}';
   }
   return url;
 }
 
+String _normalizeLangCode(String raw) {
+  final v = raw.trim().toLowerCase();
+  if (v == 'e' || v.isEmpty) return 'en';
+  if (v == 'f') return 'fr';
+  if (v.length >= 2) return v.split('-').first;
+  return 'en';
+}
+
 final liveSpeechProvider = StateNotifierProvider<LiveSpeechNotifier, LiveSpeechState>((ref) {
-  return LiveSpeechNotifier();
+  return LiveSpeechNotifier(ref);
+});
+
+/// Voice uses the language selected on the lesson screen (language list). When user switches
+/// language there, we reconnect so LLM and TTS use the new language.
+final voiceTargetLanguageCodeProvider = Provider<String>((ref) {
+  final lang = ref.watch(languageProvider);
+  return _normalizeLangCode(lang.code ?? 'en');
+});
+
+/// When mounted (e.g. in shell), listens to language changes and reconnects voice WS so
+/// switching language on the lesson screen immediately applies to voice.
+final voiceReconnectOnLanguageChangeProvider = Provider<void>((ref) {
+  final notifier = ref.watch(liveSpeechProvider.notifier);
+  ref.listen(voiceTargetLanguageCodeProvider, (prev, next) {
+    if (next.isEmpty) return;
+    if (prev != null && prev != next) {
+      notifier.disconnect();
+      notifier.connect(targetLanguageCode: next);
+    }
+  });
 });
 
 enum VoiceState { idle, listening, processing, speaking, error }
@@ -64,12 +96,15 @@ class LiveSpeechState {
 }
 
 class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
+  final Ref _ref;
   WebSocketChannel? _channel;
   FlutterSoundRecorder? _recorder;
   FlutterSoundPlayer? _player;
   StreamSubscription? _recorderSubscription;
+  String _lastAudioCodec = 'pcm16';
+  int _lastAudioSampleRate = 24000;
 
-  LiveSpeechNotifier() : super(LiveSpeechState()) {
+  LiveSpeechNotifier(this._ref) : super(LiveSpeechState()) {
     _init();
   }
 
@@ -97,22 +132,34 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
     ));
   }
 
-  Future<void> connect() async {
+  /// Connect to voice WebSocket. Uses [targetLanguageCode] from profile when not provided.
+  Future<void> connect({String? targetLanguageCode}) async {
     try {
+      _disconnectChannel(); // close existing if any
       final userId = Supabase.instance.client.auth.currentUser?.id;
       final accessToken =
           Supabase.instance.client.auth.currentSession?.accessToken;
-      final url = _getWsUrl(userId, accessToken);
+      final raw = targetLanguageCode ?? _ref.read(languageProvider).code;
+      final langCode = _normalizeLangCode(raw);
+      final url = _getWsUrl(userId, accessToken, langCode);
       print('Attempting to connect to WS: $url');
       _channel = WebSocketChannel.connect(Uri.parse(url));
       await _channel!.ready; // Wait for connection to be established
       print('WebSocket Connection Established');
-      state = state.copyWith(errorMessage: "Connected to Server");
+      state = state.copyWith(status: VoiceState.idle, errorMessage: null);
 
       _channel!.stream.listen(
         (message) {
           if (message is String) {
             print('WS Text: $message');
+            if (message.startsWith('AUDIO:')) {
+              final rest = message.substring(6);
+              final parts = rest.split(',');
+              if (parts.length >= 2) {
+                _lastAudioCodec = parts[0].trim().toLowerCase();
+                _lastAudioSampleRate = int.tryParse(parts[1].trim()) ?? 24000;
+              }
+            }
           } else {
             print('WS Binary: ${message.runtimeType} length: ${(message as List).length}');
             _playAudio(message);
@@ -131,6 +178,17 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
       print('WS Connection Exception: $e');
       state = state.copyWith(status: VoiceState.error, errorMessage: "Conn Error: $e");
     }
+  }
+
+  /// Disconnect and clear channel. Call before reconnect with new language.
+  void disconnect() {
+    _disconnectChannel();
+    state = state.copyWith(status: VoiceState.idle, errorMessage: null);
+  }
+
+  void _disconnectChannel() {
+    _channel?.sink.close();
+    _channel = null;
   }
 
   Future<void> startRecording() async {
@@ -189,11 +247,11 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
   Future<void> _playAudio(dynamic data) async {
     state = state.copyWith(status: VoiceState.speaking);
     final Uint8List bytes = data is Uint8List ? data : Uint8List.fromList(List<int>.from(data));
-    
+    final codec = _lastAudioCodec == 'mp3' ? Codec.mp3 : Codec.pcm16;
     await _player!.startPlayer(
       fromDataBuffer: bytes,
-      sampleRate: 24000, // TTS output rate (Chatterbox usually 24k)
-      codec: Codec.pcm16,
+      sampleRate: _lastAudioSampleRate,
+      codec: codec,
       whenFinished: () {
         state = state.copyWith(status: VoiceState.idle);
       },
@@ -204,7 +262,7 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
   void dispose() {
     _recorder?.closeRecorder();
     _player?.closePlayer();
-    _channel?.sink.close();
+    _disconnectChannel();
     super.dispose();
   }
 }
@@ -264,6 +322,19 @@ class LiveSpeechPage extends ConsumerWidget {
     final s = AppStrings.forLocale(locale);
     final scheme = Theme.of(context).colorScheme;
 
+    // When effective language changes (or on first open), connect/reconnect with current target language
+    ref.listen(voiceTargetLanguageCodeProvider, (prev, next) {
+      if (next == null || next.isEmpty) return;
+      if (prev == null) {
+        // First time opening voice screen: connect with current language (e.g. from lecon topic)
+        notifier.connect(targetLanguageCode: next);
+      } else if (prev != next) {
+        // User changed language (e.g. switched topic on lecon then came back): reconnect
+        notifier.disconnect();
+        notifier.connect(targetLanguageCode: next);
+      }
+    });
+
     return Scaffold(
       backgroundColor: scheme.surface,
       appBar: AppBar(
@@ -290,12 +361,6 @@ class LiveSpeechPage extends ConsumerWidget {
                   style: TextStyle(color: scheme.error, fontSize: 14),
                 ),
               ),
-            TextButton.icon(
-              onPressed: () => notifier.connect(),
-              icon: Icon(Icons.refresh, color: scheme.onSurfaceVariant),
-              label: Text(s.reconnectWs, style: TextStyle(color: scheme.onSurfaceVariant)),
-            ),
-            const SizedBox(height: 20),
             GestureDetector(
               onLongPressStart: (_) => notifier.startRecording(),
               onLongPressEnd: (_) => notifier.stopRecording(),
