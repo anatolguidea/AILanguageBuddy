@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../theme/app_colors.dart';
 import '../../../../core/l10n/app_strings.dart';
@@ -9,6 +10,8 @@ import '../widgets/lessons_header.dart';
 import '../widgets/lessons_topic_card.dart';
 import '../widgets/lesson_step_circle.dart';
 import 'lesson_detail_page.dart';
+import '../../data/lessons_repository.dart';
+import '../../../settings/presentation/providers/language_provider.dart';
 
 class LessonsPage extends ConsumerWidget {
   const LessonsPage({super.key});
@@ -18,11 +21,15 @@ class LessonsPage extends ConsumerWidget {
     final locale = ref.watch(appLocaleProvider);
     final s = AppStrings.forLocale(locale);
     final lessonsAsync = ref.watch(lessonsProvider);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        child: lessonsAsync.when(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        body: SafeArea(
+          child: lessonsAsync.when(
           data: (lessons) {
             final firstLesson = lessons.isNotEmpty ? lessons.first : null;
             final level = firstLesson?.content['level']?.toString() ?? 'B2';
@@ -77,13 +84,34 @@ class LessonsPage extends ConsumerWidget {
                             return LessonStepCircle(
                               lesson: lesson,
                               isLast: index == lessons.length - 1,
-                              onTap: () {
+                              onTap: () async {
                                 if (lesson.status == LessonStatus.locked) return;
-                                Navigator.of(context).push(
-                                  MaterialPageRoute<void>(
-                                    builder: (_) => LessonDetailPage(lesson: lesson),
-                                  ),
-                                );
+                                try {
+                                  final repo =
+                                      ref.read(lessonsRepositoryProvider);
+                                  final language =
+                                      ref.read(languageProvider).code;
+                                  final fullLesson = await repo.getLessonDetails(
+                                    lessonId: lesson.id,
+                                    languageCode: language,
+                                  );
+                                  if (!context.mounted) return;
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) =>
+                                          LessonDetailPage(lesson: fullLesson),
+                                    ),
+                                  );
+                                } catch (e) {
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        '${s.error}: $e',
+                                      ),
+                                    ),
+                                  );
+                                }
                               },
                             );
                           }),
@@ -95,10 +123,43 @@ class LessonsPage extends ConsumerWidget {
               ),
             );
           },
-          loading: () => const Center(
+          loading: () => Center(
             child: Padding(
-              padding: EdgeInsets.all(24),
-              child: CircularProgressIndicator(color: AppColors.primary),
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Simple shimmer/skeleton effect using Container placeholders.
+                  Container(
+                    width: double.infinity,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceVariant
+                          .withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: List.generate(4, (index) {
+                      return Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceVariant
+                              .withOpacity(0.6),
+                          shape: BoxShape.circle,
+                        ),
+                      );
+                    }),
+                  ),
+                ],
+              ),
             ),
           ),
           error: (err, stack) => Center(
@@ -119,6 +180,7 @@ class LessonsPage extends ConsumerWidget {
                 ],
               ),
             ),
+          ),
           ),
         ),
       ),

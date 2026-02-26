@@ -10,6 +10,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Entity
@@ -48,6 +49,14 @@ public class Lexeme {
 
     @Column(length = 20)
     private String emoji;
+
+    @Column(name = "native_phrases", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
+    private Map<String, String> nativePhrases;
+
+    @Column(name = "native_prompts", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
+    private Map<String, String> nativePrompts;
 
     @Column(name = "sort_order")
     private Integer sortOrder;

@@ -5,6 +5,7 @@ import '../../../settings/presentation/providers/language_provider.dart';
 
 final lessonsProvider = FutureProvider<List<Lesson>>((ref) async {
   final repository = ref.watch(lessonsRepositoryProvider);
-  final language = ref.watch(languageProvider); 
+  final language = ref.watch(languageProvider);
+  // This now uses the lightweight /summary endpoint under the hood.
   return repository.getLessons(languageCode: language.code);
 });

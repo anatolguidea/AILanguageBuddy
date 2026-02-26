@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -8,6 +9,8 @@ import '../domain/entities/lesson.dart';
 final lessonsRepositoryProvider = Provider((ref) => LessonsRepository());
 
 class LessonsRepository {
+  final Map<String, Lesson> _lessonCache = {};
+
   Future<List<Lesson>> getLessons({String? languageCode}) async {
     final token = Supabase.instance.client.auth.currentSession?.accessToken;
     if (token == null) return [];
@@ -16,8 +19,9 @@ class LessonsRepository {
     if (languageCode != null && languageCode.isNotEmpty) {
       params['language'] = languageCode;
     }
+    // Use lightweight metadata endpoint for fast initial loading.
     final url = Uri.parse(
-      '$defaultBackendBaseUrl/api/v1/lessons',
+      '$defaultBackendBaseUrl/api/v1/lessons/summary',
     ).replace(queryParameters: params.isEmpty ? null : params);
     final response = await http.get(
       url,
@@ -25,11 +29,49 @@ class LessonsRepository {
     );
 
     if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body);
-      return data.map((json) => Lesson.fromJson(json)).toList();
+      // Parse on a background isolate to avoid jank for larger payloads.
+      return compute(_parseLessonsList, response.body);
     } else {
       throw Exception('Failed to load lessons');
     }
+  }
+
+  Future<Lesson> getLessonDetails({
+    required String lessonId,
+    String? languageCode,
+  }) async {
+    // Serve from in-memory cache if available.
+    final cached = _lessonCache[lessonId];
+    if (cached != null && cached.content.isNotEmpty) {
+      return cached;
+    }
+
+    final token = Supabase.instance.client.auth.currentSession?.accessToken;
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final params = <String, String>{};
+    if (languageCode != null && languageCode.isNotEmpty) {
+      params['language'] = languageCode;
+    }
+
+    final url = Uri.parse(
+      '$defaultBackendBaseUrl/api/v1/lessons/$lessonId',
+    ).replace(queryParameters: params.isEmpty ? null : params);
+
+    final response = await http.get(
+      url,
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load lesson details');
+    }
+
+    final lesson = await compute(_parseSingleLesson, response.body);
+    _lessonCache[lessonId] = lesson;
+    return lesson;
   }
 
   Future<void> completeLesson(String lessonId) async {
@@ -75,6 +117,16 @@ class LessonsRepository {
           int.tryParse(response.headers['x-audio-sample-rate'] ?? '') ?? 24000,
     );
   }
+}
+
+List<Lesson> _parseLessonsList(String body) {
+  final List<dynamic> data = jsonDecode(body);
+  return data.map((json) => Lesson.fromJson(json as Map<String, dynamic>)).toList();
+}
+
+Lesson _parseSingleLesson(String body) {
+  final Map<String, dynamic> json = jsonDecode(body);
+  return Lesson.fromJson(json);
 }
 
 class LessonSpeechAudio {

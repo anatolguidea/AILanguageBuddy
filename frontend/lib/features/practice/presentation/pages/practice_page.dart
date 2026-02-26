@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -30,12 +31,16 @@ class _PracticePageState extends ConsumerState<PracticePage> {
     final s = AppStrings.forLocale(locale);
     final topicsAsync = ref.watch(topicsProvider);
     final customTopicsAsync = ref.watch(customTopicsProvider);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Stack(
-          children: [
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        body: SafeArea(
+          child: Stack(
+            children: [
             RefreshIndicator(
               onRefresh: () async {
                 ref.refresh(topicsProvider.future);
@@ -202,7 +207,8 @@ class _PracticePageState extends ConsumerState<PracticePage> {
                 ),
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );

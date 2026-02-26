@@ -159,6 +159,9 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
                 _lastAudioCodec = parts[0].trim().toLowerCase();
                 _lastAudioSampleRate = int.tryParse(parts[1].trim()) ?? 24000;
               }
+            } else if (message.startsWith('TEXT:')) {
+              final text = message.substring(5).trim();
+              state = state.copyWith(lastTranscript: text);
             }
           } else {
             print('WS Binary: ${message.runtimeType} length: ${(message as List).length}');
@@ -320,7 +323,9 @@ class LiveSpeechPage extends ConsumerWidget {
     final notifier = ref.read(liveSpeechProvider.notifier);
     final locale = ref.watch(appLocaleProvider);
     final s = AppStrings.forLocale(locale);
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     // When effective language changes (or on first open), connect/reconnect with current target language
     ref.listen(voiceTargetLanguageCodeProvider, (prev, next) {
@@ -338,8 +343,9 @@ class LiveSpeechPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: scheme.surface,
       appBar: AppBar(
-        title: Text(s.liveAssistant),
-        backgroundColor: Colors.transparent,
+        backgroundColor: scheme.surface,
+        elevation: 0,
+        title: Text(s.liveAssistant, style: TextStyle(color: scheme.onSurface)),
         actions: [
           IconButton(
             icon: Icon(Icons.language_rounded, color: scheme.onSurface),
@@ -348,10 +354,44 @@ class LiveSpeechPage extends ConsumerWidget {
           ),
         ],
       ),
-      body: Center(
+      body: SafeArea(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            const SizedBox(height: 16),
+            // AI speech bubble at the top with current reply text
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: speechState.lastTranscript.isEmpty ? 0.0 : 1.0,
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withOpacity(0.06)
+                          : scheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isDark ? Colors.white24 : scheme.outlineVariant,
+                      ),
+                    ),
+                    child: Text(
+                      speechState.lastTranscript.isEmpty
+                          ? s.tapHoldToSpeak
+                          : speechState.lastTranscript,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: scheme.onSurface,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const Spacer(),
             if (speechState.errorMessage != null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -366,17 +406,19 @@ class LiveSpeechPage extends ConsumerWidget {
               onLongPressEnd: (_) => notifier.stopRecording(),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
-                width: 200,
-                height: 200,
+                width: speechState.status == VoiceState.speaking ? 220 : 200,
+                height: speechState.status == VoiceState.speaking ? 220 : 200,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: _getColor(speechState.status, scheme),
                   boxShadow: [
-                    if (speechState.status == VoiceState.listening)
+                    if (speechState.status == VoiceState.listening ||
+                        speechState.status == VoiceState.speaking)
                       BoxShadow(
-                        color: scheme.primary.withOpacity(0.5),
-                        blurRadius: 50,
-                        spreadRadius: 20,
+                        color: scheme.primary.withOpacity(
+                            speechState.status == VoiceState.speaking ? 0.8 : 0.5),
+                        blurRadius: speechState.status == VoiceState.speaking ? 60 : 40,
+                        spreadRadius: speechState.status == VoiceState.speaking ? 30 : 20,
                       )
                   ],
                 ),
@@ -390,7 +432,7 @@ class LiveSpeechPage extends ConsumerWidget {
             const SizedBox(height: 40),
             Text(
               _getStatusText(speechState.status, s),
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              style: theme.textTheme.headlineSmall?.copyWith(
                 color: scheme.onSurface,
               ),
             ),
@@ -399,6 +441,7 @@ class LiveSpeechPage extends ConsumerWidget {
               s.holdToSpeak,
               style: TextStyle(color: scheme.onSurfaceVariant),
             ),
+            const SizedBox(height: 32),
           ],
         ),
       ),

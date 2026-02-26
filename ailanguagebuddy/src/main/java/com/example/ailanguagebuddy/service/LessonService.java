@@ -1,6 +1,7 @@
 package com.example.ailanguagebuddy.service;
 
 import com.example.ailanguagebuddy.api.dto.LessonDto;
+import com.example.ailanguagebuddy.api.dto.LessonSummaryDto;
 import com.example.ailanguagebuddy.model.Lesson;
 import com.example.ailanguagebuddy.model.UserLessonProgress;
 import com.example.ailanguagebuddy.repository.LexemeRepository;
@@ -45,6 +46,7 @@ public class LessonService {
                 this.jdbcTemplate = jdbcTemplate;
         }
 
+        @org.springframework.cache.annotation.Cacheable(cacheNames = "lessonDetails")
         public List<LessonDto> getLessonsForUser(UUID userId, String languageCode) {
                 String resolvedLanguage = resolveTargetLanguage(userId, languageCode);
 
@@ -90,6 +92,59 @@ public class LessonService {
                 }
 
                 return results;
+        }
+
+        /**
+         * Lightweight metadata view used by the mobile app to render the lesson list quickly.
+         * DOES NOT generate interactive card content.
+         */
+        @org.springframework.cache.annotation.Cacheable(cacheNames = "lessonSummaries")
+        public List<LessonSummaryDto> getLessonSummariesForUser(UUID userId, String languageCode) {
+                // Cache summaries per user+language pair.
+                // The key is derived automatically from method parameters.
+                // These are effectively static for seeded lessons.
+                String resolvedLanguage = resolveTargetLanguage(userId, languageCode);
+
+                List<Lesson> lessons = lessonRepository.findByLanguageCode(resolvedLanguage, Sort.by("orderIndex"));
+                List<UserLessonProgress> progressList = progressRepository.findByUserId(userId);
+                Map<UUID, String> statusMap = progressList.stream()
+                                .collect(Collectors.toMap(UserLessonProgress::getLessonId,
+                                                UserLessonProgress::getStatus));
+
+                List<LessonSummaryDto> results = new ArrayList<>();
+                boolean previousCompleted = true;
+
+                for (Lesson lesson : lessons) {
+                        String status = statusMap.getOrDefault(lesson.getId(), "locked");
+
+                        if (status.equals("locked")) {
+                                if (previousCompleted) {
+                                        status = "available";
+                                }
+                        }
+
+                        previousCompleted = "completed".equalsIgnoreCase(status);
+
+                        results.add(new LessonSummaryDto(
+                                        lesson.getId(),
+                                        lesson.getTitle(),
+                                        lesson.getDescription(),
+                                        status,
+                                        lesson.getOrderIndex() != null ? lesson.getOrderIndex() : 0));
+                }
+
+                return results;
+        }
+
+        /**
+         * Fetch a single lesson with its interactive content for the detail screen.
+         * Reuses the existing getLessonsForUser logic to preserve gating and status rules.
+         */
+        public LessonDto getLessonForUser(UUID userId, UUID lessonId, String languageCode) {
+                return getLessonsForUser(userId, languageCode).stream()
+                                .filter(dto -> dto.id().equals(lessonId))
+                                .findFirst()
+                                .orElseThrow(() -> new IllegalArgumentException("Lesson not found: " + lessonId));
         }
 
         private String resolveTargetLanguage(UUID userId, String requestedLanguage) {
@@ -153,7 +208,7 @@ public class LessonService {
                 List<Map<String, Object>> challenges = new ArrayList<>();
                 challenges.add(imageChoiceCard(focus, distractorA, distractorB));
                 challenges.add(translatePickerCard(focus, distractorA, distractorB));
-                challenges.add(sentenceBuilderCard(focus, distractorA));
+                challenges.add(sentenceBuilderCard(focus, distractorA, targetLanguage));
 
                 content.put("source_language", "en");
                 content.put("target_language", targetLanguage);
@@ -172,7 +227,9 @@ public class LessonService {
                                                 e.getTargetWord(),
                                                 e.getTargetPhrase(),
                                                 e.getCorrectOrder() != null ? e.getCorrectOrder() : List.of(),
-                                                e.getEmoji()))
+                                                e.getEmoji(),
+                                                e.getNativePhrases(),
+                                                e.getNativePrompts()))
                                 .toList();
         }
 
@@ -188,7 +245,24 @@ public class LessonService {
 
                 Map<String, Object> card = new LinkedHashMap<>();
                 card.put("type", "IMAGE_CHOICE");
+
+                // Backward-compatible question text (still English for now).
                 card.put("question", "Which one is \"" + focus.englishWord + "\"?");
+
+                // New structured instruction map (per native/app language).
+                Map<String, String> instruction = new LinkedHashMap<>();
+                instruction.put("en", "Select the correct translation.");
+                card.put("instruction", instruction);
+
+                // Optional prompt payload describing what is being asked about, per source language.
+                Map<String, String> prompt = new LinkedHashMap<>();
+                if (focus.nativePrompts != null) {
+                        prompt.putAll(focus.nativePrompts);
+                }
+                // Always ensure we have at least an English fallback referencing the base word.
+                prompt.putIfAbsent("en", "Which word means \"" + focus.englishWord + "\"?");
+                card.put("prompt_native", prompt);
+
                 card.put("options", options);
                 return card;
         }
@@ -213,7 +287,24 @@ public class LessonService {
 
                 Map<String, Object> card = new LinkedHashMap<>();
                 card.put("type", "TRANSLATE_PICKER");
+
+                // Backward-compatible question text (still English for now).
                 card.put("question", "How do you say \"" + focus.englishWord + "\"?");
+
+                // New structured instruction map (per native/app language).
+                Map<String, String> instruction = new LinkedHashMap<>();
+                instruction.put("en", "Select the correct translation.");
+                card.put("instruction", instruction);
+
+                // Optional prompt payload describing what is being translated, per source language.
+                Map<String, String> prompt = new LinkedHashMap<>();
+                if (focus.nativePrompts != null) {
+                        prompt.putAll(focus.nativePrompts);
+                }
+                // Always ensure we have at least an English fallback referencing the base word.
+                prompt.putIfAbsent("en", "How do you say \"" + focus.englishWord + "\"?");
+                card.put("prompt_native", prompt);
+
                 card.put("options", options);
                 card.put("correct_answer", focus.targetWord);
                 return card;
@@ -222,7 +313,7 @@ public class LessonService {
         /**
          * SENTENCE_BUILDER: Reorder words to translate a phrase.
          */
-        private Map<String, Object> sentenceBuilderCard(LexemeData focus, LexemeData distractor) {
+        private Map<String, Object> sentenceBuilderCard(LexemeData focus, LexemeData distractor, String targetLanguage) {
                 List<String> wordBank = new ArrayList<>(focus.correctOrder);
                 // Add some distractors to the bank
                 wordBank.add(distractor.targetWord.split(" ")[0]);
@@ -230,9 +321,37 @@ public class LessonService {
 
                 Map<String, Object> card = new LinkedHashMap<>();
                 card.put("type", "SENTENCE_BUILDER");
+
+                // Structured instruction, keyed by native/app language (English-only for now).
+                Map<String, String> instruction = new LinkedHashMap<>();
+                instruction.put("en", "Translate this sentence.");
+                card.put("instruction", instruction);
+
+                // Base English sentence we are translating from.
+                String englishSentence = focus.englishPhrase != null ? focus.englishPhrase : focus.englishWord;
+
+                // Backward-compatible fields used by existing clients.
                 card.put("question", "Translate this sentence");
-                card.put("sentence_to_translate",
-                                focus.englishPhrase != null ? focus.englishPhrase : focus.englishWord);
+                card.put("sentence_to_translate", englishSentence);
+
+                // New structured sentence maps:
+                // - sentence_native: same sentence expressed in the learner's native/app language(s).
+                Map<String, String> sentenceNative = new LinkedHashMap<>();
+                if (focus.nativePhrases != null) {
+                        sentenceNative.putAll(focus.nativePhrases);
+                }
+                // Always ensure we have at least the English base as a fallback.
+                sentenceNative.putIfAbsent("en", englishSentence);
+                card.put("sentence_native", sentenceNative);
+
+                // - sentence_target: sentence expressed in the target learning language.
+                Map<String, String> sentenceTarget = new LinkedHashMap<>();
+                String targetSentence = focus.targetPhrase != null && !focus.targetPhrase.isBlank()
+                                ? focus.targetPhrase
+                                : String.join(" ", focus.correctOrder);
+                sentenceTarget.put(targetLanguage, targetSentence);
+                card.put("sentence_target", sentenceTarget);
+
                 card.put("word_bank", wordBank);
                 card.put("correct_order", focus.correctOrder);
                 return card;
@@ -244,9 +363,15 @@ public class LessonService {
                         String targetWord,
                         String targetPhrase,
                         List<String> correctOrder,
-                        String emoji) {
+                        String emoji,
+                        Map<String, String> nativePhrases,
+                        Map<String, String> nativePrompts) {
         }
 
+        @org.springframework.cache.annotation.CacheEvict(cacheNames = {
+                        "lessonSummaries",
+                        "lessonDetails"
+        }, allEntries = true)
         public void completeLesson(UUID userId, UUID lessonId) {
                 UserLessonProgress progress = progressRepository
                                 .findById(new com.example.ailanguagebuddy.model.UserLessonProgressId(userId, lessonId))

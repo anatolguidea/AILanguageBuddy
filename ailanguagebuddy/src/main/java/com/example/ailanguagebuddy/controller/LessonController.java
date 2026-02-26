@@ -1,6 +1,7 @@
 package com.example.ailanguagebuddy.controller;
 
 import com.example.ailanguagebuddy.api.dto.LessonDto;
+import com.example.ailanguagebuddy.api.dto.LessonSummaryDto;
 import com.example.ailanguagebuddy.security.AuthUserResolver;
 import com.example.ailanguagebuddy.service.LessonService;
 import org.springframework.http.ResponseEntity;
@@ -37,5 +38,22 @@ public class LessonController {
         var user = authUserResolver.fromJwt(jwt);
         lessonService.completeLesson(user.userId(), id);
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/summary")
+    public ResponseEntity<List<LessonSummaryDto>> getLessonSummaries(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String language) {
+        var user = authUserResolver.fromJwt(jwt);
+        return ResponseEntity.ok(lessonService.getLessonSummariesForUser(user.userId(), language));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<LessonDto> getLessonDetails(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable java.util.UUID id,
+            @RequestParam(required = false) String language) {
+        var user = authUserResolver.fromJwt(jwt);
+        return ResponseEntity.ok(lessonService.getLessonForUser(user.userId(), id, language));
     }
 }

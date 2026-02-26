@@ -160,11 +160,16 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
             // Append this turn to session history for next time (same session only)
             appendToSessionHistory(session.getId(), transcribedText, aiReply);
 
-            // 3. TTS (Text -> Voice) with language for correct voice
+            // 3. Send AI text to client so UI can display it
+            if (session.isOpen()) {
+                session.sendMessage(new TextMessage("TEXT:" + aiReply));
+            }
+
+            // 4. TTS (Text -> Voice) with language for correct voice
             var instant = voiceService.synthesizeInstant(aiReply, targetLanguageCode);
             byte[] audioResponse = instant.audioBytes();
 
-            // 4. Send Audio back to Client (format hint so client can use correct codec)
+            // 5. Send Audio back to Client (format hint so client can use correct codec)
             if (session.isOpen()) {
                 session.sendMessage(new TextMessage(
                         "AUDIO:" + instant.codec() + "," + instant.sampleRate()));

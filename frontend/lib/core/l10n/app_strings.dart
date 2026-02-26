@@ -112,6 +112,10 @@ class AppStrings {
     tapHoldToSpeak: 'Tap & Hold to Speak',
     liveThinking: 'Thinking...',
     liveSpeaking: 'Speaking...',
+    selectCorrectTranslation: 'Select the correct translation',
+    translateThisSentenceLabel: 'Translate this sentence',
+    whichOneIsHello: 'Which one is "hello"?',
+    howDoYouSayHello: 'How do you say "hello"?',
   );
 
   static final AppStringsData _roStrings = AppStringsData(
@@ -217,6 +221,10 @@ class AppStrings {
     tapHoldToSpeak: 'Apasă și ține pentru a vorbi',
     liveThinking: 'Se gândește...',
     liveSpeaking: 'Vorbește...',
+    selectCorrectTranslation: 'Selectează traducerea corectă',
+    translateThisSentenceLabel: 'Tradu această propoziție',
+    whichOneIsHello: 'Care variantă este corectă pentru „hello”?',
+    howDoYouSayHello: 'Cum spui „hello” corect?',
   );
 }
 
@@ -324,6 +332,10 @@ class AppStringsData {
     required this.tapHoldToSpeak,
     required this.liveThinking,
     required this.liveSpeaking,
+    required this.selectCorrectTranslation,
+    required this.translateThisSentenceLabel,
+    required this.whichOneIsHello,
+    required this.howDoYouSayHello,
   });
 
   final String welcomeBack;
@@ -428,4 +440,8 @@ class AppStringsData {
   final String tapHoldToSpeak;
   final String liveThinking;
   final String liveSpeaking;
+  final String selectCorrectTranslation;
+  final String translateThisSentenceLabel;
+  final String whichOneIsHello;
+  final String howDoYouSayHello;
 }
