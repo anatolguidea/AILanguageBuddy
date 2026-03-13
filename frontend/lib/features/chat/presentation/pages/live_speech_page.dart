@@ -8,26 +8,22 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../../core/config.dart';
 import '../../../../theme/app_colors.dart';
-import '../providers/chat_provider.dart';
 import 'package:ailanguageapp/core/l10n/app_strings.dart';
 import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
 import 'package:ailanguageapp/features/settings/presentation/providers/language_provider.dart';
 
+String get _chatApiBaseUrl => '$defaultBackendBaseUrl/api/v1/chat';
+
 // Helper to convert HTTP URL to WS URL
-String _getWsUrl(String? userId, String? accessToken, String? targetLanguageCode) {
-  final uri = Uri.parse(kBaseUrl);
+String _getWsUrl(String? targetLanguageCode) {
+  final uri = Uri.parse(_chatApiBaseUrl);
   final scheme = uri.scheme == 'https' ? 'wss' : 'ws';
   final host = uri.host;
   final port = uri.port;
   String url = '$scheme://$host:$port/ws/voice';
   final query = <String>[];
-  if (userId != null && userId.isNotEmpty) {
-    query.add('userId=$userId');
-  }
-  if (accessToken != null && accessToken.isNotEmpty) {
-    query.add('token=$accessToken');
-  }
   if (targetLanguageCode != null && targetLanguageCode.isNotEmpty) {
     query.add('targetLanguage=${Uri.encodeComponent(targetLanguageCode)}');
   }
@@ -136,14 +132,18 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
   Future<void> connect({String? targetLanguageCode}) async {
     try {
       _disconnectChannel(); // close existing if any
-      final userId = Supabase.instance.client.auth.currentUser?.id;
       final accessToken =
           Supabase.instance.client.auth.currentSession?.accessToken;
+      if (accessToken == null || accessToken.isEmpty) {
+        state = state.copyWith(status: VoiceState.error, errorMessage: "Not authenticated");
+        return;
+      }
       final raw = targetLanguageCode ?? _ref.read(languageProvider).code;
       final langCode = _normalizeLangCode(raw);
-      final url = _getWsUrl(userId, accessToken, langCode);
-      print('Attempting to connect to WS: $url');
-      _channel = WebSocketChannel.connect(Uri.parse(url));
+      final url = _getWsUrl(langCode);
+      final protocols = <String>['voice.v1', 'bearer.$accessToken'];
+      print('Attempting to connect to WS (secured subprotocol auth)');
+      _channel = WebSocketChannel.connect(Uri.parse(url), protocols: protocols);
       await _channel!.ready; // Wait for connection to be established
       print('WebSocket Connection Established');
       state = state.copyWith(status: VoiceState.idle, errorMessage: null);

@@ -1,27 +1,23 @@
-import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_tts/flutter_tts.dart';
-import 'package:flutter_sound/flutter_sound.dart';
-import 'package:speech_to_text/speech_to_text.dart';
+
+import '../../../../core/errors/app_failure.dart';
+import '../../../settings/presentation/providers/app_locale_provider.dart';
+import '../../data/chat_repository.dart';
 import '../../data/models/chat_models.dart';
-import '../../../../core/config.dart';
-import '../../../settings/presentation/providers/language_provider.dart';
-import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
-import 'current_topic_language_provider.dart';
+import '../../domain/services/chat_audio_service.dart';
 import 'session_topic_tracker.dart';
 
-// Constants
-String get kBaseUrl => '$defaultBackendBaseUrl/api/v1/chat';
-
-// Provider
 final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>((ref) {
-  return ChatNotifier(ref);
+  return ChatNotifier(
+    ref: ref,
+    repository: ref.read(chatRepositoryProvider),
+    audioService: ref.read(chatAudioServiceProvider),
+  );
 });
 
-// State
 class ChatState {
   final List<Map<String, dynamic>> messages;
   final bool isLoading;
@@ -29,7 +25,7 @@ class ChatState {
   final bool isSpeaking;
   final bool isListening;
 
-  ChatState({
+  const ChatState({
     this.messages = const [],
     this.isLoading = false,
     this.error,
@@ -54,212 +50,185 @@ class ChatState {
   }
 }
 
-// Notifier
 class ChatNotifier extends StateNotifier<ChatState> {
+  ChatNotifier({
+    required Ref ref,
+    required ChatRepository repository,
+    required ChatAudioService audioService,
+  })  : _ref = ref,
+        _repository = repository,
+        _audioService = audioService,
+        super(const ChatState()) {
+    unawaited(_initializeAudio());
+  }
+
   final Ref _ref;
-  final FlutterTts _flutterTts = FlutterTts();
-  final SpeechToText _speechToText = SpeechToText();
-  FlutterSoundPlayer? _backendTtsPlayer;
-  static bool _backendPlayerOpened = false;
+  final ChatRepository _repository;
+  final ChatAudioService _audioService;
 
-  ChatNotifier(this._ref) : super(ChatState()) {
-    _initTts();
-    _initStt();
-  }
-
-  Future<void> _initTts() async {
-    await _flutterTts.setLanguage("en-US");
-    await _flutterTts.setPitch(1.0);
-    await _flutterTts.setSpeechRate(0.5);
-    
-    _flutterTts.setStartHandler(() {
-      state = state.copyWith(isSpeaking: true);
-    });
-
-    _flutterTts.setCompletionHandler(() {
-      state = state.copyWith(isSpeaking: false);
-    });
-
-    _flutterTts.setErrorHandler((msg) {
-      state = state.copyWith(isSpeaking: false, error: "TTS Error: $msg");
-    });
-  }
-
-  Future<void> _initStt() async {
-    // Basic initialization, permission request happens on startListening
-  }
-
-  Future<void> startListening(Function(String) onResult) async {
+  Future<void> _initializeAudio() async {
     try {
-      bool available = await _speechToText.initialize(
-        onStatus: (status) {
-          if (status == 'notListening') {
-            state = state.copyWith(isListening: false);
-          }
+      await _audioService.initialize(
+        onSpeakingChanged: (isSpeaking) {
+          state = state.copyWith(isSpeaking: isSpeaking);
         },
-        onError: (errorNotification) {
-          state = state.copyWith(isListening: false, error: "STT Error: ${errorNotification.errorMsg}");
-        },
+        onError: _setError,
       );
+    } on AppFailure catch (failure) {
+      _setError(failure.message);
+    }
+  }
 
-      if (available) {
-        state = state.copyWith(isListening: true);
-        _speechToText.listen(
-          onResult: (result) {
-             onResult(result.recognizedWords);
-          },
-        );
-      } else {
-        state = state.copyWith(error: "Speech recognition not available");
-      }
-    } catch (e) {
-      state = state.copyWith(error: "Failed to initialize STT: $e");
+  Future<void> startListening(void Function(String text) onResult) async {
+    try {
+      await _audioService.startListening(
+        onResult: onResult,
+        onListeningChanged: (isListening) {
+          state = state.copyWith(isListening: isListening);
+        },
+        onError: _setError,
+      );
+    } on AppFailure catch (failure) {
+      _setError(failure.message);
     }
   }
 
   Future<void> stopListening() async {
-    await _speechToText.stop();
-    state = state.copyWith(isListening: false);
-  }
-
-  /// Speaks [text] via backend TTS. Only pass the AI reply content (not correction/tips).
-  /// Uses current topic language code so voice accent matches the conversation.
-  Future<void> speak(String text) async {
-    if (text.trim().isEmpty) return;
-    state = state.copyWith(isSpeaking: true);
     try {
-      final code = _ref.read(currentTopicLanguageProvider) ?? _ref.read(languageProvider).code;
-      final played = await _playBackendTts(text, code);
-      if (!played) await _flutterTts.speak(text);
-    } catch (_) {
-      await _flutterTts.speak(text);
-    } finally {
-      state = state.copyWith(isSpeaking: false);
+      await _audioService.stopListening();
+      state = state.copyWith(isListening: false);
+    } on AppFailure catch (failure) {
+      _setError(failure.message);
     }
   }
 
-  /// POST to backend TTS. [languageCode] must be 2-letter (en, ro, es) for correct accent.
-  Future<bool> _playBackendTts(String text, String languageCode) async {
-    // Ensure we never send shorthand "e" (backend maps it, but send "en" for consistency)
-    final lang = languageCode.trim().toLowerCase();
-    final code = (lang == 'e' || lang.isEmpty) ? 'en' : lang;
+  Future<void> speak(String text) async {
     try {
-      final token = Supabase.instance.client.auth.currentSession?.accessToken;
-      if (token == null) return false;
-      final uri = Uri.parse('$defaultBackendBaseUrl/api/v1/tts/speak');
-      final response = await http.post(
-        uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
+      await _audioService.speak(
+        text,
+        onSpeakingChanged: (isSpeaking) {
+          state = state.copyWith(isSpeaking: isSpeaking);
         },
-        body: jsonEncode({
-          'text': text,
-          'language': code,
-          'languageCode': code,
-        }),
-      ).timeout(const Duration(seconds: 8));
-      if (response.statusCode != 200) return false;
-      final bytes = response.bodyBytes;
-      if (bytes.isEmpty) return false;
-      final codecStr = (response.headers['x-audio-codec'] ?? 'pcm16').toLowerCase();
-      final codec = codecStr == 'mp3' ? Codec.mp3 : Codec.pcm16;
-      final sampleRate = int.tryParse(response.headers['x-audio-sample-rate'] ?? '') ?? 24000;
-      _backendTtsPlayer ??= FlutterSoundPlayer();
-      if (!_backendPlayerOpened) {
-        await _backendTtsPlayer!.openPlayer();
-        _backendPlayerOpened = true;
-      }
-      if (_backendTtsPlayer!.isPlaying) await _backendTtsPlayer!.stopPlayer();
-      await _backendTtsPlayer!.startPlayer(
-        fromDataBuffer: Uint8List.fromList(bytes),
-        codec: codec,
-        sampleRate: sampleRate,
       );
-      return true;
-    } catch (_) {
-      return false;
+    } on AppFailure catch (failure) {
+      _setError(failure.message);
     }
   }
 
   Future<void> stopSpeaking() async {
-    await _flutterTts.stop();
-    if (_backendTtsPlayer != null && _backendTtsPlayer!.isPlaying) {
-      await _backendTtsPlayer!.stopPlayer();
+    try {
+      await _audioService.stopSpeaking();
+      state = state.copyWith(isSpeaking: false);
+    } on AppFailure catch (failure) {
+      _setError(failure.message);
     }
   }
 
   Future<void> loadHistory(String scenarioId, {String? targetLanguage}) async {
+    final token = _currentAccessToken();
+    if (token == null) {
+      _setError('Not authenticated');
+      return;
+    }
+
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final token = Supabase.instance.client.auth.currentSession?.accessToken;
-      if (token == null) {
-        state = state.copyWith(isLoading: false, error: 'Not authenticated');
-        return;
-      }
+      final history = await _repository.fetchHistory(
+        accessToken: token,
+        mode: scenarioId,
+        limit: 50,
+      );
 
-      final headers = {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      };
+      final loadedMessages =
+          history.messages.map(_toUiMessageFromApi).toList(growable: false);
+      state = state.copyWith(messages: loadedMessages, isLoading: false);
 
-      final response = await http.get(
-        Uri.parse('$kBaseUrl/history/v2?limit=50&mode=$scenarioId'),
-        headers: headers,
-      ).timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final historyResponse = ChatHistoryResponse.fromJson(data);
-
-        final loadedMessages = historyResponse.messages.map((m) {
-          final role = m.role == 'assistant' ? 'ai' : m.role;
-          final map = <String, dynamic>{
-            'role': role,
-            'content': m.content,
-          };
-          if (m.correction != null) map['correction'] = m.correction;
-          if (m.tips != null) map['tips'] = m.tips;
-          return map;
-        }).toList();
-
-        state = state.copyWith(
-          messages: loadedMessages,
-          isLoading: false,
+      final tracker = _ref.read(sessionTopicTrackerProvider.notifier);
+      if (loadedMessages.isEmpty && !tracker.hasReceivedInitial(scenarioId)) {
+        await _loadInitialMessage(
+          scenarioId: scenarioId,
+          token: token,
+          targetLanguage: targetLanguage ?? 'English',
+          instructionLocale: _ref.read(appLocaleProvider),
         );
-
-        // Session topic tracker: if no history and we haven't sent initial for this topic, fetch it.
-        final tracker = _ref.read(sessionTopicTrackerProvider.notifier);
-        if (loadedMessages.isEmpty && !tracker.hasReceivedInitial(scenarioId)) {
-          final instructionLocale = _ref.read(appLocaleProvider);
-          await _fetchInitialMessage(scenarioId, token, headers, targetLanguage ?? 'English', instructionLocale);
-        }
-      } else {
-        state = state.copyWith(isLoading: false, error: 'Failed to load history');
       }
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Network error loading history');
+    } on AppFailure catch (failure) {
+      state = state.copyWith(isLoading: false);
+      _setError(failure.message);
     }
   }
 
-  Future<void> _fetchInitialMessage(String scenarioId, String token, Map<String, String> headers, String targetLanguage, String instructionLocale) async {
+  Future<void> deleteHistoryAndRestart(
+    String scenarioId, {
+    String? targetLanguage,
+  }) async {
+    final token = _currentAccessToken();
+    if (token == null) {
+      _setError('Not authenticated');
+      return;
+    }
+
+    state = state.copyWith(isLoading: true, error: null);
     try {
-      final uri = Uri.parse('$kBaseUrl/initial?mode=${Uri.encodeComponent(scenarioId)}&targetLanguage=${Uri.encodeComponent(targetLanguage)}&instructionLocale=${Uri.encodeComponent(instructionLocale)}');
-      final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final chatResponse = ChatAskResponse.fromJson(data);
-        final map = <String, dynamic>{
-          'role': 'ai',
-          'content': chatResponse.replyText,
-        };
-        if (chatResponse.correction != null) map['correction'] = chatResponse.correction;
-        if (chatResponse.tips != null) map['tips'] = chatResponse.tips;
-        state = state.copyWith(messages: [...state.messages, map]);
-        _ref.read(sessionTopicTrackerProvider.notifier).markInitialSent(scenarioId);
+      await _repository.deleteHistory(accessToken: token, mode: scenarioId);
+      _ref.read(sessionTopicTrackerProvider.notifier).clearInitialForTopic(
+            scenarioId,
+          );
+      state = state.copyWith(messages: [], isLoading: false);
+      await loadHistory(scenarioId, targetLanguage: targetLanguage);
+    } on AppFailure catch (failure) {
+      state = state.copyWith(isLoading: false);
+      _setError(failure.message);
+    }
+  }
+
+  Future<void> sendMessage(
+    String text,
+    String scenarioId,
+    String targetLanguage,
+  ) async {
+    if (text.trim().isEmpty) {
+      return;
+    }
+    final token = _currentAccessToken();
+    if (token == null) {
+      _setError('Not authenticated');
+      return;
+    }
+
+    state = state.copyWith(
+      messages: [...state.messages, {'role': 'user', 'content': text}],
+      isLoading: true,
+      error: null,
+    );
+
+    try {
+      final response = await _repository.ask(
+        accessToken: token,
+        request: ChatAskRequest(
+          message: text,
+          mode: scenarioId,
+          targetLanguage: targetLanguage,
+          instructionLocale: _ref.read(appLocaleProvider),
+        ),
+      );
+      final aiMap = <String, dynamic>{
+        'role': 'ai',
+        'content': response.replyText,
+      };
+      if (response.correction != null) {
+        aiMap['correction'] = response.correction;
       }
-    } catch (_) {
-      // Non-fatal: user can still type
+      if (response.tips != null) {
+        aiMap['tips'] = response.tips;
+      }
+      state = state.copyWith(
+        messages: [...state.messages, aiMap],
+        isLoading: false,
+      );
+    } on AppFailure catch (failure) {
+      state = state.copyWith(isLoading: false);
+      _setError(failure.message);
     }
   }
 
@@ -267,89 +236,58 @@ class ChatNotifier extends StateNotifier<ChatState> {
     state = state.copyWith(messages: []);
   }
 
-  /// Deletes server history for this topic, clears local messages, and reloads so user gets a fresh initial message.
-  Future<void> deleteHistoryAndRestart(String scenarioId, {String? targetLanguage}) async {
-    state = state.copyWith(isLoading: true, error: null);
-    try {
-      final token = Supabase.instance.client.auth.currentSession?.accessToken;
-      if (token == null) {
-        state = state.copyWith(isLoading: false, error: 'Not authenticated');
-        return;
-      }
-      final headers = {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      };
-      final uri = Uri.parse('$kBaseUrl/history?mode=${Uri.encodeComponent(scenarioId)}');
-      final response = await http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
-      if (response.statusCode == 204 || response.statusCode == 200) {
-        state = state.copyWith(messages: []);
-        _ref.read(sessionTopicTrackerProvider.notifier).clearInitialForTopic(scenarioId);
-        await loadHistory(scenarioId, targetLanguage: targetLanguage);
-      } else {
-        state = state.copyWith(isLoading: false, error: 'Failed to clear history');
-      }
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Failed to clear history');
-    }
+  String? _currentAccessToken() {
+    return Supabase.instance.client.auth.currentSession?.accessToken;
   }
 
-  Future<void> sendMessage(String text, String scenarioId, String targetLanguage) async {
-    if (text.trim().isEmpty) return;
-
-    // Optimistic Update
-    final userMessage = {'role': 'user', 'content': text};
-    state = state.copyWith(
-      messages: [...state.messages, userMessage],
-      isLoading: true,
-      error: null,
+  Future<void> _loadInitialMessage({
+    required String scenarioId,
+    required String token,
+    required String targetLanguage,
+    required String instructionLocale,
+  }) async {
+    final initial = await _repository.fetchInitialMessage(
+      accessToken: token,
+      mode: scenarioId,
+      targetLanguage: targetLanguage,
+      instructionLocale: instructionLocale,
     );
-
-    try {
-      final token = Supabase.instance.client.auth.currentSession?.accessToken;
-      final headers = {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      };
-
-      final body = ChatAskRequest(
-        message: text,
-        mode: scenarioId,
-        targetLanguage: targetLanguage,
-        instructionLocale: _ref.read(appLocaleProvider),
-      ).toJson();
-
-      final response = await http.post(
-        Uri.parse('$kBaseUrl/ask'),
-        headers: headers,
-        body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final chatResponse = ChatAskResponse.fromJson(data);
-        final aiMap = <String, dynamic>{
-          'role': 'ai',
-          'content': chatResponse.replyText,
-        };
-        if (chatResponse.correction != null) aiMap['correction'] = chatResponse.correction;
-        if (chatResponse.tips != null) aiMap['tips'] = chatResponse.tips;
-
-        state = state.copyWith(
-          messages: [...state.messages, aiMap],
-          isLoading: false,
-        );
-      } else {
-        state = state.copyWith(
-           messages: [...state.messages, {'role': 'ai', 'content': 'Error: ${response.statusCode}'}],
-           isLoading: false,
-        );
-      }
-    } catch (e) {
-      state = state.copyWith(
-        messages: [...state.messages, {'role': 'ai', 'content': 'Network/Connection Error'}],
-        isLoading: false,
-      );
+    final message = <String, dynamic>{
+      'role': 'ai',
+      'content': initial.replyText,
+    };
+    if (initial.correction != null) {
+      message['correction'] = initial.correction;
     }
+    if (initial.tips != null) {
+      message['tips'] = initial.tips;
+    }
+    state = state.copyWith(messages: [...state.messages, message]);
+    _ref.read(sessionTopicTrackerProvider.notifier).markInitialSent(scenarioId);
+  }
+
+  Map<String, dynamic> _toUiMessageFromApi(ChatMessage message) {
+    final role = message.role == 'assistant' ? 'ai' : message.role;
+    final map = <String, dynamic>{
+      'role': role,
+      'content': message.content,
+    };
+    if (message.correction != null) {
+      map['correction'] = message.correction;
+    }
+    if (message.tips != null) {
+      map['tips'] = message.tips;
+    }
+    return map;
+  }
+
+  void _setError(String message) {
+    state = state.copyWith(error: message);
+  }
+
+  @override
+  void dispose() {
+    unawaited(_audioService.dispose());
+    super.dispose();
   }
 }

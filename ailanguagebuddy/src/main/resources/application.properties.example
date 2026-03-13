@@ -11,3 +11,6 @@
 
 # --- Database (Supabase connection pooling URI) ---
 # spring.datasource.url=jdbc:postgresql://YOUR_PROJECT.pooler.supabase.com:6543/postgres?user=postgres.YOUR_REF&password=YOUR_PASSWORD
+
+# --- WebSocket allowed origins (comma-separated, no wildcard) ---
+# app.websocket.allowed-origins=http://localhost,http://127.0.0.1

@@ -5,8 +5,11 @@ import com.example.ailanguagebuddy.service.VoiceServiceClient;
 import com.example.ailanguagebuddy.domain.AiTutorResult;
 import com.example.ailanguagebuddy.domain.LearningContext;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.BinaryMessage;
+import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.BinaryWebSocketHandler;
@@ -19,6 +22,7 @@ import java.util.List;
 @Component
 public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(VoiceWebSocketHandler.class);
     private final VoiceServiceClient voiceService;
     private final ChatService chatService;
     private final com.example.ailanguagebuddy.repository.ChatMessageRepository chatMessageRepository;
@@ -43,28 +47,24 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        System.out.println("Voice WS Connected: " + session.getId());
+        log.info("Voice WS connected: sessionId={}", session.getId());
+        UUID authenticatedUserId = (UUID) session.getAttributes()
+                .get(VoiceJwtHandshakeInterceptor.ATTR_AUTHENTICATED_USER_ID);
+        if (authenticatedUserId == null) {
+            session.close(CloseStatus.POLICY_VIOLATION.withReason("Unauthenticated websocket session"));
+            return;
+        }
+        session.getAttributes().put("userId", authenticatedUserId);
 
-        // Extract userId and targetLanguage from query params
-        // Expected URI: /ws/voice?userId=...&targetLanguage=es
         String query = session.getUri().getQuery();
-        UUID userId = null;
         String targetLanguageCode = "en";
-        // Always store normalized code so LLM and TTS use the same language
         if (query != null) {
             for (String param : query.split("&")) {
-                if (param.startsWith("userId=")) {
-                    String idStr = param.substring(7).split("&")[0];
-                    try {
-                        userId = UUID.fromString(idStr);
-                        session.getAttributes().put("userId", userId);
-                        System.out.println("User ID identified: " + userId);
-                    } catch (IllegalArgumentException e) {
-                        System.err.println("Invalid User ID format: " + idStr);
-                    }
-                } else if (param.startsWith("targetLanguage=")) {
+                if (param.startsWith("targetLanguage=")) {
                     String raw = param.substring(14).split("&")[0].trim();
-                    if (raw.isEmpty()) raw = "en";
+                    if (raw.isEmpty()) {
+                        raw = "en";
+                    }
                     targetLanguageCode = normalizeLanguageCode(raw);
                     session.getAttributes().put("targetLanguageCode", targetLanguageCode);
                 }
@@ -72,11 +72,6 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
         }
         session.getAttributes().put("targetLanguageCode", targetLanguageCode);
 
-        if (userId == null) {
-            System.err.println("Warning: No valid userId found in connection request.");
-        }
-
-        // Initialize buffer
         sessionAudioBuffers.put(session.getId(), new java.io.ByteArrayOutputStream());
         sessionVoiceHistory.put(session.getId(), new ArrayList<>());
         session.sendMessage(new TextMessage("CONNECTED"));
@@ -117,10 +112,9 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
             }
 
             byte[] completeAudio = buffer.toByteArray();
-            // Reset buffer for next turn
             buffer.reset();
 
-            System.out.println("Processing audio turn: " + completeAudio.length + " bytes");
+            log.debug("Processing voice audio turn: bytes={}", completeAudio.length);
 
             UUID userId = (UUID) session.getAttributes().get("userId");
             if (userId == null) {
@@ -130,54 +124,43 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
 
             String targetLanguageCode = normalizeLanguageCode(
                     (String) session.getAttributes().getOrDefault("targetLanguageCode", "en"));
-            System.out.println("Voice session language: " + targetLanguageCode);
+            log.debug("Voice session language: {}", targetLanguageCode);
 
-            // 1. STT (Audio -> Text) in the target language
             String transcribedText = voiceService.transcribe(completeAudio, targetLanguageCode);
-
-            System.out.println("User said (STT): " + transcribedText);
+            log.debug("STT completed for session {}", session.getId());
 
             if (transcribedText == null || transcribedText.trim().isEmpty()) {
                 session.sendMessage(new TextMessage("ERROR: No speech detected"));
                 return;
             }
 
-            // 2. LLM (Text -> Text)
-            // Use same LearningContext shape as chat (mode=general) so the LLM gets the exact same prompt as chat messages
             LearningContext context = new LearningContext(
                     toDisplayName(targetLanguageCode),
                     "English",
                     "A1",
                     "general",
                     "en");
-            // Use in-memory session history only (cleared when socket closes)
             String voiceHistoryBlock = buildSessionHistoryBlock(session.getId());
             AiTutorResult aiResult = chatService.askLanguageCoach(transcribedText, userId, context, voiceHistoryBlock);
-            // Only the reply is sent to TTS (not corrections or tips)
             String aiReply = aiResult.replyText();
-            System.out.println("AI Reply: " + aiReply);
+            log.debug("LLM completed for session {}", session.getId());
 
-            // Append this turn to session history for next time (same session only)
             appendToSessionHistory(session.getId(), transcribedText, aiReply);
 
-            // 3. Send AI text to client so UI can display it
             if (session.isOpen()) {
                 session.sendMessage(new TextMessage("TEXT:" + aiReply));
             }
 
-            // 4. TTS (Text -> Voice) with language for correct voice
             var instant = voiceService.synthesizeInstant(aiReply, targetLanguageCode);
             byte[] audioResponse = instant.audioBytes();
 
-            // 5. Send Audio back to Client (format hint so client can use correct codec)
             if (session.isOpen()) {
                 session.sendMessage(new TextMessage(
                         "AUDIO:" + instant.codec() + "," + instant.sampleRate()));
                 session.sendMessage(new BinaryMessage(audioResponse));
             }
         } catch (Exception e) {
-            System.err.println("Error processing voice turn: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error processing voice turn: {}", e.getMessage(), e);
             try {
                 session.sendMessage(new TextMessage("ERROR: " + e.getMessage()));
             } catch (Exception ignored) {
