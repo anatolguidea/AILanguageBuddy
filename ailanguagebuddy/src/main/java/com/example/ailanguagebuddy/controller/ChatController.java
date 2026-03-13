@@ -8,6 +8,7 @@ import com.example.ailanguagebuddy.api.dto.CorrectionDto;
 import com.example.ailanguagebuddy.api.dto.VocabularyItemDto;
 import com.example.ailanguagebuddy.security.AuthUserResolver;
 import com.example.ailanguagebuddy.service.ChatService;
+import com.example.ailanguagebuddy.service.VoiceServiceClient;
 import com.example.ailanguagebuddy.domain.LearningContext;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -24,10 +25,15 @@ public class ChatController {
 
         private final ChatService chatService;
         private final AuthUserResolver authUserResolver;
+        private final VoiceServiceClient voiceServiceClient;
 
-        public ChatController(ChatService chatService, AuthUserResolver authUserResolver) {
+        public ChatController(
+                        ChatService chatService,
+                        AuthUserResolver authUserResolver,
+                        VoiceServiceClient voiceServiceClient) {
                 this.chatService = chatService;
                 this.authUserResolver = authUserResolver;
+                this.voiceServiceClient = voiceServiceClient;
         }
 
         @PostMapping("/ask")
@@ -53,6 +59,7 @@ public class ChatController {
                                 .toList() : List.<VocabularyItemDto>of();
                 return ResponseEntity.ok(new ChatAskResponse(
                                 result.replyText(),
+                                result.translation(),
                                 result.correction(),
                                 result.tips(),
                                 correctionsDto,
@@ -77,10 +84,34 @@ public class ChatController {
                 var result = chatService.getInitialMessage(user.userId(), ctx);
                 return ResponseEntity.ok(new ChatAskResponse(
                                 result.replyText(),
+                                result.translation(),
                                 result.correction(),
                                 result.tips(),
                                 List.of(),
                                 List.of()));
+        }
+
+        @PostMapping("/voice/prewarm")
+        public ResponseEntity<Void> prewarmVoice(
+                        @AuthenticationPrincipal Jwt jwt,
+                        @RequestBody(required = false) VoicePrewarmRequest request) {
+                var user = authUserResolver.fromJwt(jwt);
+                String languageCode = request != null ? request.languageCode() : "en";
+                String targetLanguage = request != null ? request.targetLanguage() : "English";
+                chatService.prewarmVoiceModel(
+                                new LearningContext(
+                                                targetLanguage == null || targetLanguage.isBlank()
+                                                                ? "English"
+                                                                : targetLanguage,
+                                                "English",
+                                                "A1",
+                                                "VOICE_LIVE",
+                                                "en"));
+                voiceServiceClient.prewarm(languageCode);
+                return ResponseEntity.noContent().build();
+        }
+
+        public record VoicePrewarmRequest(String languageCode, String targetLanguage) {
         }
 
         @GetMapping("/history")

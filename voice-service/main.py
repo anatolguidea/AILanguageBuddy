@@ -112,6 +112,10 @@ class SpeakRequest(BaseModel):
     languageCode: str | None = None
 
 
+class PrewarmRequest(BaseModel):
+    language: str = "en"
+
+
 def _collapse_repeated_words(text: str) -> str:
     """Collapse consecutive repeated words (e.g. 'defeating defeating' -> 'defeating')."""
     if not text or not text.strip():
@@ -163,11 +167,51 @@ def health_check():
     }
 
 
+@app.post("/prewarm")
+async def prewarm(request: PrewarmRequest):
+    """Warm STT/TTS paths for lower first-turn latency."""
+    lang_code = normalize_lang(request.language or "en")
+    stt_ok = False
+    tts_ok = False
+
+    if stt_model:
+        try:
+            warm_audio = np.zeros(16000, dtype=np.float32)
+            try:
+                _ = stt_model.transcribe(
+                    warm_audio,
+                    path_or_hf_repo=STT_MODEL_REPO,
+                    language=lang_code,
+                    condition_on_previous_text=False,
+                )
+            except TypeError:
+                _ = stt_model.transcribe(
+                    warm_audio,
+                    path_or_hf_repo=STT_MODEL_REPO,
+                    language=lang_code,
+                )
+            stt_ok = True
+        except Exception as e:
+            logger.warning("STT prewarm failed: %s", e)
+
+    provider = edge_tts_provider if USE_EDGE_TTS else tts_provider
+    if provider is not None:
+        try:
+            # Generate one chunk to trigger model/session initialization.
+            async for _chunk in provider.stream("Ready.", lang_code):
+                break
+            tts_ok = True
+        except Exception as e:
+            logger.warning("TTS prewarm failed: %s", e)
+
+    return {"status": "ok", "stt_prewarm": stt_ok, "tts_prewarm": tts_ok}
+
+
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...), language: str = "en"):
     if not stt_model:
-        logger.warning("STT not loaded. Returning mock.")
-        return {"text": "Hello AI, how are you?"}
+        logger.error("STT model unavailable.")
+        raise HTTPException(status_code=503, detail="STT model unavailable")
     try:
         contents = await file.read()
         lang_code = normalize_lang(language or "en")

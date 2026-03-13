@@ -1,9 +1,10 @@
 package com.example.ailanguagebuddy.config;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.http.HttpMethod;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -39,11 +40,19 @@ public class SecurityConfig {
      * tight coupling to issuer/audience details and keep local dev simple.
      */
     @Bean
-    JwtDecoder jwtDecoder(@Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}") String jwkSetUri) {
+    JwtDecoder jwtDecoder() {
+        String jwkSetUri = "https://ehpwqatgjqfwosoibmoz.supabase.co/auth/v1/.well-known/jwks.json";
+
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(30_000);
+        requestFactory.setReadTimeout(30_000);
+        RestTemplate restTemplate = new RestTemplate(requestFactory);
+
         // Configure Nimbus to use JWKS but explicitly support ES256 (for Supabase ECC
         // keys)
         // We also keep RS256 for backward compatibility if needed.
         NimbusJwtDecoder delegate = NimbusJwtDecoder.withJwkSetUri(jwkSetUri)
+                .restOperations(restTemplate)
                 .jwsAlgorithm(org.springframework.security.oauth2.jose.jws.SignatureAlgorithm.ES256)
                 // .jwsAlgorithm(SignatureAlgorithm.RS256) // Optional: If we needed both, we'd
                 // use a different builder

@@ -8,17 +8,17 @@ import java.util.List;
  */
 public record AiTutorResult(
         String replyText,
+        String translation,
         String correction,
         String tips,
         List<Correction> corrections,
         List<VocabularyItem> vocabulary
 ) {
-    public AiTutorResult(String replyText, String correction, String tips) {
-        this(replyText, correction, tips, List.of(), List.of());
+    public AiTutorResult(String replyText, String translation, String correction, String tips) {
+        this(replyText, translation, correction, tips, List.of(), List.of());
     }
 
     public AiTutorResult(String replyText, List<Correction> corrections, List<VocabularyItem> vocabulary) {
-        this(replyText, null, null, corrections, vocabulary);
+        this(replyText, null, null, null, corrections, vocabulary);
     }
 }
-

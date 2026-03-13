@@ -82,19 +82,6 @@ public class ChatService {
 
             AiTutorResult result = parseTutorResult(rawResponse);
 
-            // Voice call + non-English target: if the model replied in English, force-translate to target
-            if (isVoiceCall && context != null) {
-                String target = context.targetLanguage();
-                if (target != null && !target.isBlank() && !"English".equalsIgnoreCase(target.trim())
-                        && isLikelyEnglishReply(result.replyText())) {
-                    String translated = translateReplyToTarget(result.replyText(), target);
-                    if (translated != null && !translated.isBlank()) {
-                        log.debug("Voice: translated reply from English to {}: {} -> {}", target, result.replyText(), translated);
-                        result = new AiTutorResult(translated, result.correction(), result.tips());
-                    }
-                }
-            }
-
             if (!isVoiceCall) {
                 repository.saveAndFlush(new ChatMessage(
                         result.replyText(),
@@ -163,7 +150,7 @@ public class ChatService {
 
     private AiTutorResult parseTutorResult(String raw) {
         if (raw == null || raw.isBlank()) {
-            return new AiTutorResult("No reply received from AI.", null, null, List.of(), List.of());
+            return new AiTutorResult("No reply received from AI.", null, null, null, List.of(), List.of());
         }
 
         String trimmed = raw.trim();
@@ -187,55 +174,23 @@ public class ChatService {
                     String correction = node.has("correction") && !node.path("correction").isNull()
                             ? node.path("correction").asText("").trim()
                             : null;
+                    String translation = node.has("translation") && !node.path("translation").isNull()
+                            ? node.path("translation").asText("").trim()
+                            : null;
                     String tips = node.has("tips") && !node.path("tips").isNull()
                             ? node.path("tips").asText("").trim()
                             : null;
+                    if (translation != null && translation.isEmpty()) translation = null;
                     if (correction != null && correction.isEmpty()) correction = null;
                     if (tips != null && tips.isEmpty()) tips = null;
-                    return new AiTutorResult(replyText, correction, tips);
+                    return new AiTutorResult(replyText, translation, correction, tips);
                 }
             } catch (Exception ex) {
                 log.warn("Failed to parse AI JSON, falling back to raw text: {}", ex.getMessage());
             }
         }
 
-        return new AiTutorResult(raw, null, null, List.of(), List.of());
-    }
-
-    /** Heuristic: reply looks like English (common greetings/phrases). Used to trigger translation for voice. */
-    private static boolean isLikelyEnglishReply(String text) {
-        if (text == null || text.isBlank()) return false;
-        String lower = text.trim().toLowerCase();
-        if (lower.startsWith("hello") || lower.startsWith("hi ") || lower.startsWith("hi!")
-                || lower.startsWith("how are you") || lower.startsWith("good morning")
-                || lower.startsWith("good afternoon") || lower.startsWith("good evening")
-                || lower.startsWith("nice to meet") || lower.startsWith("thanks ")
-                || lower.startsWith("thank you") || lower.startsWith("good to talk")
-                || lower.startsWith("how's your day") || lower.contains("how are you today")
-                || lower.contains("it seems like") || lower.contains("could you tell me")
-                || lower.contains("i think you might") || lower.contains("what's on your mind")) {
-            return true;
-        }
-        return false;
-    }
-
-    /** Single LLM call: translate the reply to the target language. Used when voice model replied in English. */
-    private String translateReplyToTarget(String replyText, String targetLanguageDisplayName) {
-        if (replyText == null || replyText.isBlank() || targetLanguageDisplayName == null || targetLanguageDisplayName.isBlank()) {
-            return replyText;
-        }
-        try {
-            String systemPrompt = "You are a translator. Translate the following English text to " + targetLanguageDisplayName + ". "
-                    + "Output ONLY the translation, nothing else. No quotes, no explanation. Keep the same tone (friendly, conversational).";
-            Prompt prompt = new Prompt(List.of(
-                    new SystemMessage(systemPrompt),
-                    new UserMessage(replyText)));
-            String out = chatModel.call(prompt).getResult().getOutput().getText();
-            return out != null ? out.trim() : replyText;
-        } catch (Exception e) {
-            log.warn("Translation to {} failed, using original reply: {}", targetLanguageDisplayName, e.getMessage());
-            return replyText;
-        }
+        return new AiTutorResult(raw, null, null, null, List.of(), List.of());
     }
 
     @Transactional
@@ -266,6 +221,27 @@ public class ChatService {
             return result;
         } catch (Exception e) {
             throw new RuntimeException("Initial message request failed", e);
+        }
+    }
+
+    public void prewarmVoiceModel(LearningContext context) {
+        try {
+            var effective = context != null ? context : LearningContext.defaultChat();
+            var systemMessage = new SystemMessage(
+                    promptBuilder.buildSystemPrompt(
+                            new LearningContext(
+                                    effective.targetLanguage(),
+                                    effective.nativeLanguage(),
+                                    "A1",
+                                    "VOICE_LIVE",
+                                    effective.instructionLocale()),
+                            "",
+                            "(model warmup)"));
+            var userMessage = new UserMessage("Reply with a short JSON warmup response.");
+            chatModel.call(new Prompt(List.of(systemMessage, userMessage)));
+            log.debug("LLM prewarm completed for target language={}", effective.targetLanguage());
+        } catch (Exception e) {
+            log.warn("LLM prewarm failed: {}", e.getMessage());
         }
     }
 }

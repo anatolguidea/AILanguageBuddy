@@ -27,6 +27,7 @@ class ChatAskRequest {
 
 class ChatAskResponse {
   final String replyText;
+  final String? translation;
   final String? correction;
   final String? tips;
   final List<Correction> corrections;
@@ -34,6 +35,7 @@ class ChatAskResponse {
 
   ChatAskResponse({
     required this.replyText,
+    this.translation,
     this.correction,
     this.tips,
     this.corrections = const [],
@@ -43,6 +45,7 @@ class ChatAskResponse {
   factory ChatAskResponse.fromJson(Map<String, dynamic> json) {
     return ChatAskResponse(
       replyText: json['replyText'] ?? '',
+      translation: _optStr(json['translation']),
       correction: _optStr(json['correction']),
       tips: _optStr(json['tips']),
       corrections: (json['corrections'] as List?)?.map((e) => Correction.fromJson(e)).toList() ?? [],

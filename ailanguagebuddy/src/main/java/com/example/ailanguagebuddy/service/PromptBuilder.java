@@ -68,15 +68,17 @@ public class PromptBuilder {
             - Use the history to resolve pronouns.
             - Reply in a tutor style: acknowledge what they said, add a short encouraging or clarifying sentence, and optionally ask a follow-up question or suggest something to talk about. Aim for 2–4 sentences (about 40–55 words). Keep it natural and conversational, not robotic.
             - If the user made grammar/vocabulary mistakes, provide the corrected version and a brief tip.
+            - Include a translation only when useful for the learner's native language; otherwise use an empty string.
             - Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
-            {"reply": "your spoken reply in the target language", "correction": "corrected version of user's last message or empty string if no errors", "tips": "brief grammar or vocabulary tip or empty string"}
+            {"reply": "your spoken reply in the target language", "translation": "translation of reply in native language or empty string", "correction": "corrected version of user's last message or empty string if no errors", "tips": "brief grammar or vocabulary tip or empty string"}
 
             - "reply" must be ONLY in the target language (%s). Do not mix languages. For voice mode, never reply in English when the target is another language.
+            - "translation" should be in %s only when it helps comprehension. If not needed, return "".
             - "correction" must be the full corrected sentence of the user's last message, or "" if no correction needed.
             - "tips" must be one short sentence (e.g. Use "went" for past tense of "go"). Use double quotes for examples; avoid backslash-escaping. Use "" if no tip.
             %s
             """.formatted(mode, topicsBlock, topicInstruction, safeHistory, target, safeCurrent, target, nativeLang, level, liveVoiceInstruction,
-                    target, instructionLanguageRule.isBlank() ? "" : "\n" + instructionLanguageRule);
+                    target, nativeLang, instructionLanguageRule.isBlank() ? "" : "\n" + instructionLanguageRule);
     }
 
     /** Prompt for generating the first message when the user opens a topic with no history. */
@@ -102,7 +104,7 @@ public class PromptBuilder {
 
             There is no prior history. Write a friendly first message as a tutor would: greet them, briefly say what you can do together for this topic, and ask a first question or suggest something to try. Use 2–3 sentences (about 30–45 words). Warm and inviting, not one-line. Your entire reply MUST be in the target language (%s) only.
 
-            Respond ONLY with valid JSON: {"reply": "your first message in target language", "correction": "", "tips": ""}
+            Respond ONLY with valid JSON: {"reply": "your first message in target language", "translation": "", "correction": "", "tips": ""}
             """.formatted(mode, topicInstruction, target, nativeLang, level, target);
     }
 

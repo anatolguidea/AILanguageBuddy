@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_sound/flutter_sound.dart';
+import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:audio_session/audio_session.dart';
@@ -140,6 +142,7 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
       }
       final raw = targetLanguageCode ?? _ref.read(languageProvider).code;
       final langCode = _normalizeLangCode(raw);
+      await _prewarmVoiceBackend(accessToken, langCode);
       final url = _getWsUrl(langCode);
       final protocols = <String>['voice.v1', 'bearer.$accessToken'];
       print('Attempting to connect to WS (secured subprotocol auth)');
@@ -180,6 +183,29 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
     } catch (e) {
       print('WS Connection Exception: $e');
       state = state.copyWith(status: VoiceState.error, errorMessage: "Conn Error: $e");
+    }
+  }
+
+  Future<void> _prewarmVoiceBackend(String accessToken, String languageCode) async {
+    final uri = Uri.parse('$defaultBackendBaseUrl/api/v1/chat/voice/prewarm');
+    try {
+      await http
+          .post(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $accessToken',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'languageCode': languageCode,
+            }),
+          )
+          .timeout(const Duration(seconds: 10))
+          .then((_) {
+            print('Voice prewarm completed successfully');
+          });
+    } catch (e) {
+      print('Voice prewarm failed: $e');
     }
   }
 

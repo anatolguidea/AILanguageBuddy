@@ -2,6 +2,7 @@ package com.example.ailanguagebuddy.config;
 
 import com.example.ailanguagebuddy.service.ChatService;
 import com.example.ailanguagebuddy.service.VoiceServiceClient;
+import com.example.ailanguagebuddy.service.VoiceServiceUnavailableException;
 import com.example.ailanguagebuddy.domain.AiTutorResult;
 import com.example.ailanguagebuddy.domain.LearningContext;
 
@@ -16,6 +17,7 @@ import org.springframework.web.socket.handler.BinaryWebSocketHandler;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -71,6 +73,21 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
             }
         }
         session.getAttributes().put("targetLanguageCode", targetLanguageCode);
+        final String prewarmLanguageCode = targetLanguageCode;
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                chatService.prewarmVoiceModel(new LearningContext(
+                        toDisplayName(prewarmLanguageCode),
+                        "English",
+                        "A1",
+                        "VOICE_LIVE",
+                        "en"));
+                voiceService.prewarm(prewarmLanguageCode);
+            } catch (Exception e) {
+                log.debug("Voice prewarm skipped: {}", e.getMessage());
+            }
+        });
 
         sessionAudioBuffers.put(session.getId(), new java.io.ByteArrayOutputStream());
         sessionVoiceHistory.put(session.getId(), new ArrayList<>());
@@ -145,19 +162,25 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
             String aiReply = aiResult.replyText();
             log.debug("LLM completed for session {}", session.getId());
 
+            var instant = voiceService.synthesizeInstant(aiReply, targetLanguageCode);
+            byte[] audioResponse = instant.audioBytes();
+
             appendToSessionHistory(session.getId(), transcribedText, aiReply);
 
             if (session.isOpen()) {
                 session.sendMessage(new TextMessage("TEXT:" + aiReply));
             }
 
-            var instant = voiceService.synthesizeInstant(aiReply, targetLanguageCode);
-            byte[] audioResponse = instant.audioBytes();
-
             if (session.isOpen()) {
                 session.sendMessage(new TextMessage(
                         "AUDIO:" + instant.codec() + "," + instant.sampleRate()));
                 session.sendMessage(new BinaryMessage(audioResponse));
+            }
+        } catch (VoiceServiceUnavailableException e) {
+            log.warn("Voice service unavailable: {}", e.getMessage());
+            try {
+                session.sendMessage(new TextMessage("ERROR: Voice backend unavailable. Please try again."));
+            } catch (Exception ignored) {
             }
         } catch (Exception e) {
             log.error("Error processing voice turn: {}", e.getMessage(), e);
