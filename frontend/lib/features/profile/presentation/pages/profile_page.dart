@@ -5,7 +5,6 @@ import '../../../../theme/app_colors.dart';
 import '../../../../core/constants/app_dimensions.dart';
 import '../../../../core/l10n/app_strings.dart';
 import '../../../auth/presentation/auth_state.dart';
-import '../../../auth/data/auth_repository.dart';
 import '../widgets/profile_list_tile.dart';
 import '../widgets/profile_section.dart';
 import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
@@ -17,7 +16,9 @@ void _showAppLanguagePicker(BuildContext context, WidgetRef ref) {
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: Theme.of(context).colorScheme.surface,
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
     builder: (ctx) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -25,10 +26,16 @@ void _showAppLanguagePicker(BuildContext context, WidgetRef ref) {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: Icon(
-                current == AppLocaleNotifier.en ? Icons.check_circle : Icons.circle_outlined,
-                color: current == AppLocaleNotifier.en ? Theme.of(ctx).colorScheme.primary : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.5),
-                size: 22,
+              leading: ExcludeSemantics(
+                child: Icon(
+                  current == AppLocaleNotifier.en
+                      ? Icons.check_circle
+                      : Icons.circle_outlined,
+                  color: current == AppLocaleNotifier.en
+                      ? Theme.of(ctx).colorScheme.primary
+                      : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.5),
+                  size: 22,
+                ),
               ),
               title: const Text('English'),
               onTap: () {
@@ -37,10 +44,16 @@ void _showAppLanguagePicker(BuildContext context, WidgetRef ref) {
               },
             ),
             ListTile(
-              leading: Icon(
-                current == AppLocaleNotifier.ro ? Icons.check_circle : Icons.circle_outlined,
-                color: current == AppLocaleNotifier.ro ? Theme.of(ctx).colorScheme.primary : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.5),
-                size: 22,
+              leading: ExcludeSemantics(
+                child: Icon(
+                  current == AppLocaleNotifier.ro
+                      ? Icons.check_circle
+                      : Icons.circle_outlined,
+                  color: current == AppLocaleNotifier.ro
+                      ? Theme.of(ctx).colorScheme.primary
+                      : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.5),
+                  size: 22,
+                ),
               ),
               title: const Text('Română'),
               onTap: () {
@@ -75,68 +88,137 @@ class ProfilePage extends ConsumerWidget {
             return Center(child: Text(s.notLoggedIn));
           }
           final email = user.email ?? s.noEmail;
-          
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(AppDimensions.md),
-            child: Column(
-              children: [
-                const SizedBox(height: 20),
-                CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  child: const Icon(FontAwesomeIcons.userAstronaut, size: 50),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  email,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 32),
-                
-                ProfileSection(title: s.settings, children: [
-                  ProfileListTile(
-                    icon: FontAwesomeIcons.globe,
-                    title: s.appLanguage,
-                    subtitle: locale.startsWith('ro') ? 'Română' : 'English',
-                    onTap: () => _showAppLanguagePicker(context, ref),
-                  ),
-                  ProfileListTile(
-                    icon: FontAwesomeIcons.language,
-                    title: s.languagePreferences,
-                    onTap: () {},
-                  ),
-                  ProfileListTile(
-                    icon: FontAwesomeIcons.bell,
-                    title: s.notifications,
-                    onTap: () {},
-                  ),
-                  ProfileListTile(
-                    icon: FontAwesomeIcons.bell,
-                    title: s.notifications,
-                    onTap: () {},
-                  ),
-                  _DarkThemeSwitchTile(
-                    title: s.darkTheme,
-                    value: isDark,
-                    onChanged: (value) => ref.read(themeModeProvider.notifier).setDark(value),
-                  ),
-                ]),
 
-                const SizedBox(height: 24),
-                
-                ProfileSection(title: s.account, children: [
-                  ProfileListTile(
-                    icon: FontAwesomeIcons.arrowRightFromBracket,
-                    title: s.signOut,
-                    iconColor: AppColors.error,
-                    textColor: AppColors.error,
-                    onTap: () async {
-                       await ref.read(authRepositoryProvider).signOut();
-                    },
+          return FocusTraversalGroup(
+            policy: OrderedTraversalPolicy(),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppDimensions.md),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 20),
+                  ExcludeSemantics(
+                    child: CircleAvatar(
+                      radius: 50,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                      child: const Icon(
+                        FontAwesomeIcons.userAstronaut,
+                        size: 50,
+                      ),
+                    ),
                   ),
-                ]),
-              ],
+                  const SizedBox(height: 16),
+                  FocusTraversalOrder(
+                    order: const NumericFocusOrder(1),
+                    child: Semantics(
+                      header: true,
+                      label: 'Profile email',
+                      child: Text(
+                        email,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  ProfileSection(
+                    title: s.settings,
+                    children: [
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(2),
+                        child: Semantics(
+                          button: true,
+                          label: 'App language',
+                          value: locale.startsWith('ro')
+                              ? 'Romanian'
+                              : 'English',
+                          child: ProfileListTile(
+                            icon: FontAwesomeIcons.globe,
+                            title: s.appLanguage,
+                            subtitle: locale.startsWith('ro')
+                                ? 'Română'
+                                : 'English',
+                            onTap: () => _showAppLanguagePicker(context, ref),
+                          ),
+                        ),
+                      ),
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(3),
+                        child: Semantics(
+                          button: true,
+                          label: 'Edit profile language preferences',
+                          child: ProfileListTile(
+                            icon: FontAwesomeIcons.language,
+                            title: s.languagePreferences,
+                            onTap: () {},
+                          ),
+                        ),
+                      ),
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(4),
+                        child: Semantics(
+                          button: true,
+                          label: 'Edit profile notifications',
+                          child: ProfileListTile(
+                            icon: FontAwesomeIcons.bell,
+                            title: s.notifications,
+                            onTap: () {},
+                          ),
+                        ),
+                      ),
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(5),
+                        child: Semantics(
+                          button: true,
+                          label: 'Notifications',
+                          child: ProfileListTile(
+                            icon: FontAwesomeIcons.bell,
+                            title: s.notifications,
+                            onTap: () {},
+                          ),
+                        ),
+                      ),
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(6),
+                        child: _DarkThemeSwitchTile(
+                          title: s.darkTheme,
+                          value: isDark,
+                          onChanged: (value) => ref
+                              .read(themeModeProvider.notifier)
+                              .setDark(value),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  ProfileSection(
+                    title: s.account,
+                    children: [
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(7),
+                        child: Semantics(
+                          button: true,
+                          label: 'Sign out',
+                          child: ProfileListTile(
+                            icon: FontAwesomeIcons.arrowRightFromBracket,
+                            title: s.signOut,
+                            iconColor: AppColors.error,
+                            textColor: AppColors.error,
+                            onTap: () async {
+                              await ref.read(authRepositoryProvider).signOut();
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           );
         },
@@ -160,14 +242,30 @@ class _DarkThemeSwitchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(FontAwesomeIcons.moon, color: Theme.of(context).colorScheme.onSurface, size: 20),
-      title: Text(title, style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
-      trailing: Switch(
-        value: value,
-        onChanged: onChanged,
+    return MergeSemantics(
+      child: Semantics(
+        container: true,
+        button: true,
+        toggled: value,
+        label: title,
+        value: value ? 'On' : 'Off',
+        child: ListTile(
+          leading: ExcludeSemantics(
+            child: Icon(
+              FontAwesomeIcons.moon,
+              color: Theme.of(context).colorScheme.onSurface,
+              size: 20,
+            ),
+          ),
+          title: Text(
+            title,
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+          ),
+          trailing: Switch(value: value, onChanged: onChanged),
+          minVerticalPadding: 12,
+          onTap: () => onChanged(!value),
+        ),
       ),
-      onTap: () => onChanged(!value),
     );
   }
 }

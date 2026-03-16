@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_sound/flutter_sound.dart';
@@ -43,9 +45,10 @@ String _normalizeLangCode(String raw) {
   return 'en';
 }
 
-final liveSpeechProvider = StateNotifierProvider<LiveSpeechNotifier, LiveSpeechState>((ref) {
-  return LiveSpeechNotifier(ref);
-});
+final liveSpeechProvider =
+    StateNotifierProvider<LiveSpeechNotifier, LiveSpeechState>((ref) {
+      return LiveSpeechNotifier(ref);
+    });
 
 /// Voice uses the language selected on the lesson screen (language list). When user switches
 /// language there, we reconnect so LLM and TTS use the new language.
@@ -111,23 +114,28 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
     _player = FlutterSoundPlayer();
     await _recorder!.openRecorder();
     await _player!.openPlayer();
-    
+
     // Configure Audio Session for Speech
     final session = await AudioSession.instance;
-    await session.configure(AudioSessionConfiguration(
-      avAudioSessionCategory: AVAudioSessionCategory.playAndRecord,
-      avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.allowBluetooth | AVAudioSessionCategoryOptions.defaultToSpeaker,
-      avAudioSessionMode: AVAudioSessionMode.voiceChat,
-      avAudioSessionRouteSharingPolicy: AVAudioSessionRouteSharingPolicy.defaultPolicy,
-      avAudioSessionSetActiveOptions: AVAudioSessionSetActiveOptions.none,
-      androidAudioAttributes: const AndroidAudioAttributes(
-        contentType: AndroidAudioContentType.speech,
-        flags: AndroidAudioFlags.none,
-        usage: AndroidAudioUsage.voiceCommunication,
+    await session.configure(
+      AudioSessionConfiguration(
+        avAudioSessionCategory: AVAudioSessionCategory.playAndRecord,
+        avAudioSessionCategoryOptions:
+            AVAudioSessionCategoryOptions.allowBluetooth |
+            AVAudioSessionCategoryOptions.defaultToSpeaker,
+        avAudioSessionMode: AVAudioSessionMode.voiceChat,
+        avAudioSessionRouteSharingPolicy:
+            AVAudioSessionRouteSharingPolicy.defaultPolicy,
+        avAudioSessionSetActiveOptions: AVAudioSessionSetActiveOptions.none,
+        androidAudioAttributes: const AndroidAudioAttributes(
+          contentType: AndroidAudioContentType.speech,
+          flags: AndroidAudioFlags.none,
+          usage: AndroidAudioUsage.voiceCommunication,
+        ),
+        androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
+        androidWillPauseWhenDucked: true,
       ),
-      androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
-      androidWillPauseWhenDucked: true,
-    ));
+    );
   }
 
   /// Connect to voice WebSocket. Uses [targetLanguageCode] from profile when not provided.
@@ -137,7 +145,10 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
       final accessToken =
           Supabase.instance.client.auth.currentSession?.accessToken;
       if (accessToken == null || accessToken.isEmpty) {
-        state = state.copyWith(status: VoiceState.error, errorMessage: "Not authenticated");
+        state = state.copyWith(
+          status: VoiceState.error,
+          errorMessage: "Not authenticated",
+        );
         return;
       }
       final raw = targetLanguageCode ?? _ref.read(languageProvider).code;
@@ -149,6 +160,7 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
       _channel = WebSocketChannel.connect(Uri.parse(url), protocols: protocols);
       await _channel!.ready; // Wait for connection to be established
       print('WebSocket Connection Established');
+      SemanticsService.announce('Voice WebSocket connected', TextDirection.ltr);
       state = state.copyWith(status: VoiceState.idle, errorMessage: null);
 
       _channel!.stream.listen(
@@ -167,26 +179,40 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
               state = state.copyWith(lastTranscript: text);
             }
           } else {
-            print('WS Binary: ${message.runtimeType} length: ${(message as List).length}');
+            print(
+              'WS Binary: ${message.runtimeType} length: ${(message as List).length}',
+            );
             _playAudio(message);
           }
         },
         onError: (error) {
           print('WS Error callback: $error');
-          state = state.copyWith(status: VoiceState.error, errorMessage: "WS Error: $error");
+          state = state.copyWith(
+            status: VoiceState.error,
+            errorMessage: "WS Error: $error",
+          );
         },
         onDone: () {
           print('WS Closed');
-          state = state.copyWith(status: VoiceState.idle, errorMessage: "Disconnected");
+          state = state.copyWith(
+            status: VoiceState.idle,
+            errorMessage: "Disconnected",
+          );
         },
       );
     } catch (e) {
       print('WS Connection Exception: $e');
-      state = state.copyWith(status: VoiceState.error, errorMessage: "Conn Error: $e");
+      state = state.copyWith(
+        status: VoiceState.error,
+        errorMessage: "Conn Error: $e",
+      );
     }
   }
 
-  Future<void> _prewarmVoiceBackend(String accessToken, String languageCode) async {
+  Future<void> _prewarmVoiceBackend(
+    String accessToken,
+    String languageCode,
+  ) async {
     final uri = Uri.parse('$defaultBackendBaseUrl/api/v1/chat/voice/prewarm');
     try {
       await http
@@ -196,9 +222,7 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
               'Authorization': 'Bearer $accessToken',
               'Content-Type': 'application/json',
             },
-            body: jsonEncode({
-              'languageCode': languageCode,
-            }),
+            body: jsonEncode({'languageCode': languageCode}),
           )
           .timeout(const Duration(seconds: 10))
           .then((_) {
@@ -227,14 +251,20 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
     }
 
     if (status.isPermanentlyDenied) {
-      state = state.copyWith(status: VoiceState.error, errorMessage: "Mic permission permanently denied. Open Settings.");
+      state = state.copyWith(
+        status: VoiceState.error,
+        errorMessage: "Mic permission permanently denied. Open Settings.",
+      );
       await openAppSettings();
       return;
     }
 
     if (!status.isGranted) {
-       state = state.copyWith(status: VoiceState.error, errorMessage: "Mic permission denied");
-       return;
+      state = state.copyWith(
+        status: VoiceState.error,
+        errorMessage: "Mic permission denied",
+      );
+      return;
     }
 
     if (_channel == null) await connect();
@@ -253,7 +283,7 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
       toStream: recordingDataController.sink,
       codec: Codec.pcm16,
       numChannels: 1,
-      sampleRate: 16000, 
+      sampleRate: 16000,
     );
   }
 
@@ -263,19 +293,21 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
       await _recorderSubscription!.cancel();
       _recorderSubscription = null;
     }
-    
+
     // Send End-Of-Speech signal
     if (_channel != null) {
       print("Sending EOS signal");
       _channel!.sink.add("EOS");
     }
-    
+
     state = state.copyWith(status: VoiceState.processing);
   }
 
   Future<void> _playAudio(dynamic data) async {
     state = state.copyWith(status: VoiceState.speaking);
-    final Uint8List bytes = data is Uint8List ? data : Uint8List.fromList(List<int>.from(data));
+    final Uint8List bytes = data is Uint8List
+        ? data
+        : Uint8List.fromList(List<int>.from(data));
     final codec = _lastAudioCodec == 'mp3' ? Codec.mp3 : Codec.pcm16;
     await _player!.startPlayer(
       fromDataBuffer: bytes,
@@ -302,7 +334,9 @@ void _showAppLanguagePicker(BuildContext context, WidgetRef ref) {
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: Theme.of(context).colorScheme.surface,
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
     builder: (ctx) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -311,8 +345,12 @@ void _showAppLanguagePicker(BuildContext context, WidgetRef ref) {
           children: [
             ListTile(
               leading: Icon(
-                current == AppLocaleNotifier.en ? Icons.check_circle : Icons.circle_outlined,
-                color: current == AppLocaleNotifier.en ? Theme.of(ctx).colorScheme.primary : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.5),
+                current == AppLocaleNotifier.en
+                    ? Icons.check_circle
+                    : Icons.circle_outlined,
+                color: current == AppLocaleNotifier.en
+                    ? Theme.of(ctx).colorScheme.primary
+                    : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.5),
                 size: 22,
               ),
               title: const Text('English'),
@@ -323,8 +361,12 @@ void _showAppLanguagePicker(BuildContext context, WidgetRef ref) {
             ),
             ListTile(
               leading: Icon(
-                current == AppLocaleNotifier.ro ? Icons.check_circle : Icons.circle_outlined,
-                color: current == AppLocaleNotifier.ro ? Theme.of(ctx).colorScheme.primary : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.5),
+                current == AppLocaleNotifier.ro
+                    ? Icons.check_circle
+                    : Icons.circle_outlined,
+                color: current == AppLocaleNotifier.ro
+                    ? Theme.of(ctx).colorScheme.primary
+                    : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.5),
                 size: 22,
               ),
               title: const Text('Română'),
@@ -366,6 +408,21 @@ class LiveSpeechPage extends ConsumerWidget {
       }
     });
 
+    final textDirection = Directionality.of(context);
+    ref.listen(liveSpeechProvider, (previous, next) {
+      if (previous?.errorMessage != null && next.errorMessage == null) {
+        SemanticsService.announce('Voice connection ready', textDirection);
+      }
+    });
+
+    final isRecording = speechState.status == VoiceState.listening;
+    final voiceButtonLabel = isRecording
+        ? 'Stop recording and process audio'
+        : 'Start voice recording';
+    final voiceButtonHint = isRecording
+        ? 'Release to stop recording and send audio for processing'
+        : 'Press and hold to record your voice';
+
     return Scaffold(
       backgroundColor: scheme.surface,
       appBar: AppBar(
@@ -381,94 +438,184 @@ class LiveSpeechPage extends ConsumerWidget {
         ],
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 16),
-            // AI speech bubble at the top with current reply text
-            Padding(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 200),
-                  opacity: speechState.lastTranscript.isEmpty ? 0.0 : 1.0,
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white.withOpacity(0.06)
-                          : scheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isDark ? Colors.white24 : scheme.outlineVariant,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: FocusTraversalGroup(
+                  policy: OrderedTraversalPolicy(),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(height: 16),
+                      // AI speech bubble at the top with current reply text
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(1),
+                        child: Semantics(
+                          container: true,
+                          liveRegion: true,
+                          label: 'Assistant response',
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            child: AnimatedOpacity(
+                              duration: const Duration(milliseconds: 200),
+                              opacity: speechState.lastTranscript.isEmpty
+                                  ? 0.0
+                                  : 1.0,
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? Colors.white.withOpacity(0.06)
+                                      : scheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? Colors.white24
+                                        : scheme.outlineVariant,
+                                  ),
+                                ),
+                                child: Text(
+                                  speechState.lastTranscript.isEmpty
+                                      ? s.tapHoldToSpeak
+                                      : speechState.lastTranscript,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: scheme.onSurface,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      speechState.lastTranscript.isEmpty
-                          ? s.tapHoldToSpeak
-                          : speechState.lastTranscript,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: scheme.onSurface,
-                        fontSize: 16,
+                      const SizedBox(height: 24),
+                      if (speechState.errorMessage != null)
+                        FocusTraversalOrder(
+                          order: const NumericFocusOrder(2),
+                          child: Semantics(
+                            liveRegion: true,
+                            label: 'Voice error',
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Text(
+                                speechState.errorMessage!,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: scheme.error,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(3),
+                        child: MergeSemantics(
+                          child: Semantics(
+                            button: true,
+                            enabled: true,
+                            label: voiceButtonLabel,
+                            hint: voiceButtonHint,
+                            child: GestureDetector(
+                              onLongPressStart: (_) =>
+                                  notifier.startRecording(),
+                              onLongPressEnd: (_) => notifier.stopRecording(),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  minWidth: 48,
+                                  minHeight: 48,
+                                ),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  width:
+                                      speechState.status == VoiceState.speaking
+                                      ? 220
+                                      : 200,
+                                  height:
+                                      speechState.status == VoiceState.speaking
+                                      ? 220
+                                      : 200,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _getColor(
+                                      speechState.status,
+                                      scheme,
+                                    ),
+                                    boxShadow: [
+                                      if (speechState.status ==
+                                              VoiceState.listening ||
+                                          speechState.status ==
+                                              VoiceState.speaking)
+                                        BoxShadow(
+                                          color: scheme.primary.withOpacity(
+                                            speechState.status ==
+                                                    VoiceState.speaking
+                                                ? 0.8
+                                                : 0.5,
+                                          ),
+                                          blurRadius:
+                                              speechState.status ==
+                                                  VoiceState.speaking
+                                              ? 60
+                                              : 40,
+                                          spreadRadius:
+                                              speechState.status ==
+                                                  VoiceState.speaking
+                                              ? 30
+                                              : 20,
+                                        ),
+                                    ],
+                                  ),
+                                  child: ExcludeSemantics(
+                                    child: Icon(
+                                      _getIcon(speechState.status),
+                                      size: 80,
+                                      color: _getIconColor(
+                                        speechState.status,
+                                        scheme,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 40),
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(4),
+                        child: Semantics(
+                          header: true,
+                          liveRegion: true,
+                          child: Text(
+                            _getStatusText(speechState.status, s),
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              color: scheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(5),
+                        child: Text(
+                          s.holdToSpeak,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                    ],
                   ),
                 ),
               ),
-            ),
-            const Spacer(),
-            if (speechState.errorMessage != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text(
-                  speechState.errorMessage!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: scheme.error, fontSize: 14),
-                ),
-              ),
-            GestureDetector(
-              onLongPressStart: (_) => notifier.startRecording(),
-              onLongPressEnd: (_) => notifier.stopRecording(),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                width: speechState.status == VoiceState.speaking ? 220 : 200,
-                height: speechState.status == VoiceState.speaking ? 220 : 200,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _getColor(speechState.status, scheme),
-                  boxShadow: [
-                    if (speechState.status == VoiceState.listening ||
-                        speechState.status == VoiceState.speaking)
-                      BoxShadow(
-                        color: scheme.primary.withOpacity(
-                            speechState.status == VoiceState.speaking ? 0.8 : 0.5),
-                        blurRadius: speechState.status == VoiceState.speaking ? 60 : 40,
-                        spreadRadius: speechState.status == VoiceState.speaking ? 30 : 20,
-                      )
-                  ],
-                ),
-                child: Icon(
-                  _getIcon(speechState.status),
-                  size: 80,
-                  color: _getIconColor(speechState.status, scheme),
-                ),
-              ),
-            ),
-            const SizedBox(height: 40),
-            Text(
-              _getStatusText(speechState.status, s),
-              style: theme.textTheme.headlineSmall?.copyWith(
-                color: scheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              s.holdToSpeak,
-              style: TextStyle(color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 32),
-          ],
+            );
+          },
         ),
       ),
     );
