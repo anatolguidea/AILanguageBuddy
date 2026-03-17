@@ -41,172 +41,209 @@ class _PracticePageState extends ConsumerState<PracticePage> {
         body: SafeArea(
           child: Stack(
             children: [
-            RefreshIndicator(
-              onRefresh: () async {
-                ref.refresh(topicsProvider.future);
-                ref.read(customTopicsProvider.notifier).load();
-              },
-              color: Theme.of(context).colorScheme.primary,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    PracticeHeader(
-                      streakCount: 0,
-                      title: s.practice,
-                      upgradeLabel: s.upgrade,
-                      onUpgrade: () {
-                        // TODO: Navigate to upgrade / paywall
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    // All topics / Custom segmented control
-                    Row(
-                      children: [
-                        _SegmentChip(
-                          label: s.allTopics,
-                          selected: _showAllTopics,
-                          onTap: () => setState(() => _showAllTopics = true),
-                        ),
-                        const SizedBox(width: 12),
-                        _SegmentChip(
-                          label: s.custom,
-                          selected: !_showAllTopics,
-                          onTap: () => setState(() => _showAllTopics = false),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    PracticeBanner(
-                      title: s.wordOfTheDay,
-                      subtitle: s.checkTodays,
-                      onTap: () {
-                        // TODO: Implement word of the day modal
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    if (_showAllTopics) ...[
-                      topicsAsync.when(
-                        data: (topics) => ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: topics.length,
-                          itemBuilder: (context, index) {
-                            final topic = topics[index];
-                            return TopicTile(
-                              title: topic.title,
-                              icon: topic.icon,
-                              onTap: () {
-                                ref.read(currentTopicLanguageProvider.notifier).state = topic.languageCode;
-                                context.push(topic.route);
-                              },
-                            );
-                          },
-                        ),
-                        loading: () => Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(20.0),
-                            child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
-                          ),
-                        ),
-                        error: (err, stack) => Center(
-                          child: Text(
-                            s.errorLoadingTopics,
-                            style: TextStyle(color: Theme.of(context).colorScheme.error),
-                          ),
-                        ),
+              RefreshIndicator(
+                onRefresh: () async {
+                  ref.refresh(topicsProvider.future);
+                  ref.read(customTopicsProvider.notifier).load();
+                },
+                color: Theme.of(context).colorScheme.primary,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 20,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      PracticeHeader(
+                        streakCount: 0,
+                        title: s.practice,
+                        upgradeLabel: s.upgrade,
+                        onUpgrade: () {
+                          // TODO: Navigate to upgrade / paywall
+                        },
                       ),
-                    ] else ...[
-                      customTopicsAsync.when(
-                        data: (customTopics) {
-                          if (customTopics.isEmpty) {
-                            return _CustomEmptyState(
-                              message: s.noCustomTopicsYet,
-                              addLabel: s.createTopic,
-                              onAddTap: () => context.push('/practice/custom/create'),
-                            );
-                          }
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: TextButton.icon(
-                                  onPressed: () => context.push('/practice/custom/create'),
-                                  icon: const Icon(Icons.add, color: AppColors.primary, size: 20),
-                                  label: Text(s.addTopic),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: AppColors.primary,
+                      const SizedBox(height: 24),
+                      // All topics / Custom segmented control
+                      Row(
+                        children: [
+                          _SegmentChip(
+                            label: s.allTopics,
+                            selected: _showAllTopics,
+                            onTap: () => setState(() => _showAllTopics = true),
+                          ),
+                          const SizedBox(width: 12),
+                          _SegmentChip(
+                            label: s.custom,
+                            selected: !_showAllTopics,
+                            onTap: () => setState(() => _showAllTopics = false),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      PracticeBanner(
+                        title: s.wordOfTheDay,
+                        subtitle: s.checkTodays,
+                        onTap: () {
+                          // TODO: Implement word of the day modal
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      if (_showAllTopics) ...[
+                        topicsAsync.when(
+                          data: (topics) => ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: topics.length,
+                            itemBuilder: (context, index) {
+                              final topic = topics[index];
+                              return TopicTile(
+                                topicId: topic.id,
+                                title: topic.title,
+                                icon: topic.icon,
+                                onTap: () {
+                                  ref
+                                      .read(
+                                        currentTopicLanguageProvider.notifier,
+                                      )
+                                      .state = topic
+                                      .languageCode;
+                                  context.push(topic.route);
+                                },
+                              );
+                            },
+                          ),
+                          loading: () => Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(20.0),
+                              child: CircularProgressIndicator(
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                          error: (err, stack) => Center(
+                            child: Text(
+                              s.errorLoadingTopics,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ] else ...[
+                        customTopicsAsync.when(
+                          data: (customTopics) {
+                            if (customTopics.isEmpty) {
+                              return _CustomEmptyState(
+                                message: s.noCustomTopicsYet,
+                                addLabel: s.createTopic,
+                                onAddTap: () =>
+                                    context.push('/practice/custom/create'),
+                              );
+                            }
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: TextButton.icon(
+                                    onPressed: () =>
+                                        context.push('/practice/custom/create'),
+                                    icon: const Icon(
+                                      Icons.add,
+                                      color: AppColors.primary,
+                                      size: 20,
+                                    ),
+                                    label: Text(s.addTopic),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: AppColors.primary,
+                                    ),
                                   ),
                                 ),
+                                ListView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: customTopics.length,
+                                  itemBuilder: (context, index) {
+                                    final topic = customTopics[index];
+                                    return TopicTile(
+                                      topicId: 'custom',
+                                      title: topic.title,
+                                      icon: FontAwesomeIcons.lightbulb,
+                                      onTap: () {
+                                        ref
+                                            .read(
+                                              currentTopicLanguageProvider
+                                                  .notifier,
+                                            )
+                                            .state = ref
+                                            .read(languageProvider)
+                                            .code;
+                                        context.push(topic.route);
+                                      },
+                                    );
+                                  },
+                                ),
+                              ],
+                            );
+                          },
+                          loading: () => Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(20.0),
+                              child: CircularProgressIndicator(
+                                color: Theme.of(context).colorScheme.primary,
                               ),
-                              ListView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                itemCount: customTopics.length,
-                                itemBuilder: (context, index) {
-                                  final topic = customTopics[index];
-                                  return TopicTile(
-                                    title: topic.title,
-                                    icon: FontAwesomeIcons.lightbulb,
-                                    onTap: () {
-                                      ref.read(currentTopicLanguageProvider.notifier).state = ref.read(languageProvider).code;
-                                      context.push(topic.route);
-                                    },
-                                  );
-                                },
+                            ),
+                          ),
+                          error: (e, st) => Center(
+                            child: Text(
+                              s.errorLoadingCustomTopics,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
                               ),
-                            ],
-                          );
-                        },
-                        loading: () => Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(20.0),
-                            child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
+                            ),
                           ),
                         ),
-                        error: (e, st) => Center(
-                          child: Text(
-                            s.errorLoadingCustomTopics,
-                            style: TextStyle(color: Theme.of(context).colorScheme.error),
-                          ),
-                        ),
-                      ),
+                      ],
+                      const SizedBox(height: 100),
                     ],
-                    const SizedBox(height: 100),
-                  ],
+                  ),
                 ),
               ),
-            ),
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 24,
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => context.push('/live'),
-                  icon: Icon(Icons.mic, color: Theme.of(context).colorScheme.onPrimary, size: 24),
-                  label: Text(s.startFreeTalk),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 24,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => context.push('/live'),
+                    icon: Icon(
+                      Icons.mic,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                      size: 24,
                     ),
-                    elevation: 8,
-                    shadowColor: Theme.of(context).colorScheme.primary.withOpacity(0.5),
-                    textStyle: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                    label: Text(s.startFreeTalk),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      elevation: 8,
+                      shadowColor: Theme.of(
+                        context,
+                      ).colorScheme.primary.withOpacity(0.5),
+                      textStyle: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
             ],
           ),
         ),
@@ -239,14 +276,16 @@ class _SegmentChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            border: selected ? null : Border.all(color: scheme.surfaceContainerHighest),
+            border: selected
+                ? null
+                : Border.all(color: scheme.surfaceContainerHighest),
           ),
           child: Text(
             label,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: scheme.onSurface,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                ),
+              color: scheme.onSurface,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            ),
           ),
         ),
       ),
@@ -274,18 +313,16 @@ class _CustomEmptyState extends StatelessWidget {
         children: [
           Text(
             message,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 8),
           TextButton.icon(
             onPressed: onAddTap,
             icon: Icon(Icons.add, color: scheme.primary, size: 20),
             label: Text(addLabel),
-            style: TextButton.styleFrom(
-              foregroundColor: scheme.primary,
-            ),
+            style: TextButton.styleFrom(foregroundColor: scheme.primary),
           ),
         ],
       ),
