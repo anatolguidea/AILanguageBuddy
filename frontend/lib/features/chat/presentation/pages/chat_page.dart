@@ -1,16 +1,17 @@
+import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../theme/app_colors.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/constants/app_dimensions.dart';
 import '../../../../core/l10n/app_strings.dart';
-import '../widgets/avatar_display.dart';
+import '../../../../theme/app_colors.dart';
+import '../../../settings/domain/entities/language.dart';
+import '../../../settings/presentation/providers/language_provider.dart';
+import '../providers/chat_provider.dart';
+import '../providers/current_topic_language_provider.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/chat_input_bar.dart';
-import '../providers/chat_provider.dart';
-import '../../../settings/presentation/providers/language_provider.dart';
-import '../providers/current_topic_language_provider.dart';
-import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
-import '../../../settings/domain/entities/language.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
   final String scenarioId;
@@ -22,6 +23,10 @@ class ChatPage extends ConsumerStatefulWidget {
 }
 
 class _ChatPageState extends ConsumerState<ChatPage> {
+  static const Color _stitchPrimary = AppColors.primary;
+  static const Color _stitchLightBackground = Color(0xFFF7F5F8);
+  static const Color _stitchDarkBackground = Color(0xFF000000);
+
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
@@ -31,7 +36,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     Future.microtask(() {
       final notifier = ref.read(chatProvider.notifier);
       notifier.clearMessages();
-      final code = ref.read(currentTopicLanguageProvider) ?? ref.read(languageProvider).code;
+      final code =
+          ref.read(currentTopicLanguageProvider) ??
+          ref.read(languageProvider).code;
       final lang = _languageFromCode(code);
       final sessionMode = '${widget.scenarioId}_${lang.code}';
       notifier.loadHistory(sessionMode, targetLanguage: lang.name);
@@ -43,10 +50,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final normalized = c == 'e' || c.isEmpty
         ? 'en'
         : c == 'f'
-            ? 'fr'
-            : c.length >= 2
-                ? c.split('-').first
-                : 'en';
+        ? 'fr'
+        : c.length >= 2
+        ? c.split('-').first
+        : 'en';
     return Language.supported.firstWhere(
       (l) => l.code == normalized,
       orElse: () => Language.supported.first,
@@ -72,16 +79,15 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   void _sendMessage() {
     if (_messageController.text.trim().isEmpty) return;
-    final code = ref.read(currentTopicLanguageProvider) ?? ref.read(languageProvider).code;
+    final code =
+        ref.read(currentTopicLanguageProvider) ??
+        ref.read(languageProvider).code;
     final lang = _languageFromCode(code);
     final sessionMode = '${widget.scenarioId}_${lang.code}';
-    ref.read(chatProvider.notifier).sendMessage(
-      _messageController.text,
-      sessionMode,
-      lang.name,
-    );
+    ref
+        .read(chatProvider.notifier)
+        .sendMessage(_messageController.text, sessionMode, lang.name);
     _messageController.clear();
-    // Scroll will be handled by listener or post-build
   }
 
   void _toggleListening(bool isListening) {
@@ -99,214 +105,255 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
   }
 
+  String _previousUserText(List<Map<String, dynamic>> messages, int index) {
+    for (var i = index - 1; i >= 0; i--) {
+      if (messages[i]['role'] == 'user') {
+        return messages[i]['content']?.toString() ?? '';
+      }
+    }
+    return '';
+  }
+
   @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider);
     final locale = ref.watch(appLocaleProvider);
     final s = AppStrings.forLocale(locale);
-    
-    // Auto-scroll when messages change
+
     ref.listen(chatProvider, (previous, next) {
       if (next.messages.length > (previous?.messages.length ?? 0)) {
-        // Wait for list to render
         Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
       }
     });
 
     final messages = chatState.messages;
-    final isLoading = chatState.isLoading;
-    final isListening = chatState.isListening;
-    final isSpeaking = chatState.isSpeaking;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pageBg = isDark ? _stitchDarkBackground : _stitchLightBackground;
 
-    // Determine Avatar Status
-    AvatarStatus avatarStatus = AvatarStatus.idle;
-    if (isSpeaking) {
-      avatarStatus = AvatarStatus.speaking;
-    } else if (isListening) {
-      avatarStatus = AvatarStatus.listening;
-    } else if (isLoading) {
-      avatarStatus = AvatarStatus.listening; 
-    }
-
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text(
-          s.practiceSession,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 18,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: s.startOver,
-            onPressed: chatState.isLoading
-                ? null
-                : () async {
-                    final notifier = ref.read(chatProvider.notifier);
-                    final code = ref.read(currentTopicLanguageProvider) ?? ref.read(languageProvider).code;
-                    final lang = _languageFromCode(code);
-                    final sessionMode = '${widget.scenarioId}_${lang.code}';
-                    await notifier.deleteHistoryAndRestart(
-                      sessionMode,
-                      targetLanguage: lang.name,
-                    );
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(s.conversationCleared),
-                          behavior: SnackBarBehavior.floating,
-                          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          action: SnackBarAction(
-                            label: s.ok,
-                            textColor: Theme.of(context).colorScheme.primary,
-                            onPressed: () {},
-                          ),
-                        ),
-                      );
-                    }
-                  },
-          ),
-          const SizedBox(width: 8),
-        ],
+    final baseTheme = Theme.of(context);
+    final screenTheme = baseTheme.copyWith(
+      colorScheme: baseTheme.colorScheme.copyWith(primary: _stitchPrimary),
+      scaffoldBackgroundColor: pageBg,
+      textTheme: GoogleFonts.lexendTextTheme(baseTheme.textTheme),
+      appBarTheme: baseTheme.appBarTheme.copyWith(
+        backgroundColor: isDark
+            ? _stitchDarkBackground.withValues(alpha: 0.85)
+            : Colors.white,
       ),
-      extendBodyBehindAppBar: false,
-      body: Column(
-        children: [
-          // Avatar Area (fixed height so chat has more space)
-          Container(
-            height: 140,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(28),
-                bottomRight: Radius.circular(28),
-              ),
-            ),
-            child: AvatarDisplay(
-              status: avatarStatus,
-              size: 90,
-            ),
-          ),
+    );
 
-          // Chat Area
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(28),
-                  topRight: Radius.circular(28),
+    return Theme(
+      data: screenTheme,
+      child: Scaffold(
+        backgroundColor: pageBg,
+        appBar: AppBar(
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          titleSpacing: 8,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'AI Tutor: ${s.sarah}',
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              child: Column(
+              const SizedBox(height: 2),
+              Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.fromLTRB(
-                        AppDimensions.md,
-                        AppDimensions.lg,
-                        AppDimensions.md,
-                        AppDimensions.md,
-                      ),
-                      itemCount: messages.length,
-                      itemBuilder: (context, index) {
-                        final msg = messages[index];
-                      return ChatBubble(
-                        content: msg['content'] ?? '',
-                        isUser: msg['role'] == 'user',
-                        correction: msg['correction']?.toString(),
-                        tips: msg['tips']?.toString(),
-                        sarahLabel: s.sarah,
-                        listenLabel: s.listen,
-                        feedbackLabel: s.feedback,
-                        correctionLabel: s.correction,
-                        tipLabel: s.tip,
-                        onPlay: msg['role'] == 'user'
-                              ? null
-                              : () => ref.read(chatProvider.notifier).speak(msg['content'] ?? ''),
-                        );
-                      },
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: Colors.green,
+                      shape: BoxShape.circle,
                     ),
                   ),
-
-                  if (chatState.error != null)
-                    Container(
-                      margin: const EdgeInsets.symmetric(horizontal: AppDimensions.md),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.error.withOpacity(0.4)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.error_outline_rounded, color: AppColors.error, size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              '${s.error}: ${chatState.error}',
-                              style: const TextStyle(color: AppColors.error, fontSize: 13),
-                            ),
-                          ),
-                        ],
-                      ),
+                  const SizedBox(width: 5),
+                  Text(
+                    'ONLINE',
+                    style: TextStyle(
+                      fontSize: 9,
+                      letterSpacing: 1.0,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.6),
+                      fontWeight: FontWeight.w700,
                     ),
-
-                  if (isLoading)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.md, vertical: 8),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Theme.of(context).colorScheme.primary,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  s.sarahIsTyping,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                ChatInputBar(
-                  controller: _messageController,
-                  isListening: isListening,
-                  typeAMessageHint: s.typeAMessage,
-                  listeningHint: s.listening,
-                  onSend: _sendMessage,
-                  onMicTap: () => _toggleListening(isListening),
-                ),
+                  ),
                 ],
               ),
-            ),
+            ],
           ),
-        ],
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded),
+              tooltip: s.startOver,
+              onPressed: chatState.isLoading
+                  ? null
+                  : () async {
+                      final notifier = ref.read(chatProvider.notifier);
+                      final code =
+                          ref.read(currentTopicLanguageProvider) ??
+                          ref.read(languageProvider).code;
+                      final lang = _languageFromCode(code);
+                      final sessionMode = '${widget.scenarioId}_${lang.code}';
+                      await notifier.deleteHistoryAndRestart(
+                        sessionMode,
+                        targetLanguage: lang.name,
+                      );
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(s.conversationCleared),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+            ),
+            const SizedBox(width: 6),
+          ],
+        ),
+        body: Column(
+          children: [
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(
+                  AppDimensions.md,
+                  AppDimensions.lg,
+                  AppDimensions.md,
+                  AppDimensions.md,
+                ),
+                itemCount: messages.length,
+                itemBuilder: (context, index) {
+                  final msg = messages[index];
+                  return ChatBubble(
+                    key: ValueKey(
+                      'msg-$index-${msg['role']}-${msg['content']}',
+                    ),
+                    content: msg['content'] ?? '',
+                    isUser: msg['role'] == 'user',
+                    correction: msg['correction']?.toString(),
+                    tips: msg['tips']?.toString(),
+                    incorrectText: _previousUserText(messages, index),
+                    sarahLabel: s.sarah,
+                    listenLabel: s.listen,
+                    feedbackLabel: s.feedback,
+                    correctionLabel: s.correction,
+                    tipLabel: s.tip,
+                    onPlay: msg['role'] == 'user'
+                        ? null
+                        : () => ref
+                              .read(chatProvider.notifier)
+                              .speak(msg['content'] ?? ''),
+                  );
+                },
+              ),
+            ),
+            if (chatState.error != null)
+              Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: AppDimensions.md,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.red.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.error_outline_rounded,
+                          color: Colors.red,
+                          size: 19,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '${s.error}: ${chatState.error}',
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                  .animate()
+                  .fadeIn(duration: 200.ms)
+                  .slideY(begin: 0.1, end: 0, duration: 200.ms),
+            if (chatState.isLoading)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? _stitchPrimary.withValues(alpha: 0.12)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _stitchPrimary.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: _stitchPrimary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            s.sarahIsTyping,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.75),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ChatInputBar(
+              controller: _messageController,
+              isListening: chatState.isListening,
+              typeAMessageHint: s.typeAMessage,
+              listeningHint: s.listening,
+              onSend: _sendMessage,
+              onMicTap: () => _toggleListening(chatState.isListening),
+            ),
+          ],
+        ),
       ),
     );
   }

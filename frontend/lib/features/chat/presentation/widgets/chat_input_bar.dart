@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../../../theme/app_colors.dart';
-import '../../../../core/constants/app_dimensions.dart';
 
-class ChatInputBar extends StatelessWidget {
+class ChatInputBar extends StatefulWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
   final VoidCallback? onMicTap;
+  final VoidCallback? onAddTap;
   final bool isListening;
   final String? typeAMessageHint;
   final String? listeningHint;
@@ -15,110 +14,147 @@ class ChatInputBar extends StatelessWidget {
     required this.controller,
     required this.onSend,
     this.onMicTap,
+    this.onAddTap,
     this.isListening = false,
     this.typeAMessageHint,
     this.listeningHint,
   });
 
   @override
+  State<ChatInputBar> createState() => _ChatInputBarState();
+}
+
+class _ChatInputBarState extends State<ChatInputBar> {
+  bool _sendHovered = false;
+  bool _sendPressed = false;
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final primary = scheme.primary;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(
-        AppDimensions.md,
-        AppDimensions.sm,
-        AppDimensions.md,
-        AppDimensions.md + 8,
-      ),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
       decoration: BoxDecoration(
-        color: scheme.surface,
-        border: Border(
-          top: BorderSide(color: scheme.surfaceContainerHighest, width: 1),
-        ),
+        color: isDark ? const Color(0xFF000000) : Colors.white,
+        border: Border(top: BorderSide(color: primary.withValues(alpha: 0.2))),
       ),
       child: SafeArea(
         top: false,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Expanded(
-              child: TextField(
-                controller: controller,
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontSize: 16,
-                ),
-                decoration: InputDecoration(
-                  hintText: isListening ? (listeningHint ?? 'Listening...') : (typeAMessageHint ?? 'Type a message...'),
-                  hintStyle: TextStyle(
-                    color: scheme.onSurfaceVariant.withOpacity(0.8),
-                    fontSize: 15,
-                  ),
-                  filled: true,
-                  fillColor: scheme.surfaceContainerHighest,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 14,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide(color: scheme.primary, width: 1.5),
-                  ),
-                ),
-                maxLines: 4,
-                minLines: 1,
-                onSubmitted: (_) => onSend(),
-              ),
-            ),
-            const SizedBox(width: 10),
             Container(
+              width: 44,
+              height: 44,
+              margin: const EdgeInsets.only(right: 8),
               decoration: BoxDecoration(
+                color: isDark
+                    ? primary.withValues(alpha: 0.08)
+                    : Colors.transparent,
                 shape: BoxShape.circle,
-                color: isListening ? AppColors.error : scheme.surfaceContainerHighest,
-                boxShadow: [
-                  BoxShadow(
-                    color: scheme.shadow.withOpacity(0.2),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
               ),
               child: IconButton(
                 icon: Icon(
-                  isListening ? Icons.stop_rounded : Icons.mic_rounded,
-                  color: isListening ? scheme.onError : scheme.onSurface,
-                  size: 24,
+                  Icons.add_circle_outline_rounded,
+                  color: scheme.onSurfaceVariant,
                 ),
-                onPressed: onMicTap,
-                style: IconButton.styleFrom(
-                  padding: const EdgeInsets.all(12),
-                  minimumSize: const Size(48, 48),
+                onPressed: widget.onAddTap,
+              ),
+            ),
+            Expanded(
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 48),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? primary.withValues(alpha: 0.08)
+                      : const Color(0xFFF3F0F6),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: primary.withValues(alpha: 0.15)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: widget.controller,
+                        style: TextStyle(color: scheme.onSurface, fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: widget.isListening
+                              ? (widget.listeningHint ?? 'Listening...')
+                              : (widget.typeAMessageHint ??
+                                    'Type your response...'),
+                          hintStyle: TextStyle(
+                            color: scheme.onSurfaceVariant.withValues(
+                              alpha: 0.8,
+                            ),
+                            fontSize: 13,
+                          ),
+                          contentPadding: const EdgeInsets.fromLTRB(
+                            16,
+                            12,
+                            6,
+                            12,
+                          ),
+                          border: InputBorder.none,
+                        ),
+                        minLines: 1,
+                        maxLines: 4,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => widget.onSend(),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        widget.isListening
+                            ? Icons.stop_circle_rounded
+                            : Icons.mic_rounded,
+                        color: widget.isListening
+                            ? Colors.redAccent
+                            : scheme.onSurfaceVariant,
+                      ),
+                      onPressed: widget.onMicTap,
+                    ),
+                    const SizedBox(width: 4),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: scheme.primary,
-                boxShadow: [
-                  BoxShadow(
-                    color: scheme.primary.withOpacity(0.4),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+            const SizedBox(width: 8),
+            MouseRegion(
+              onEnter: (_) => setState(() => _sendHovered = true),
+              onExit: (_) => setState(() => _sendHovered = false),
+              child: GestureDetector(
+                onTapDown: (_) => setState(() => _sendPressed = true),
+                onTapCancel: () => setState(() => _sendPressed = false),
+                onTapUp: (_) => setState(() => _sendPressed = false),
+                onTap: widget.onSend,
+                child: AnimatedScale(
+                  duration: const Duration(milliseconds: 140),
+                  scale: _sendPressed ? 0.94 : (_sendHovered ? 1.06 : 1.0),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: primary,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: primary.withValues(
+                            alpha: _sendHovered ? 0.45 : 0.3,
+                          ),
+                          blurRadius: _sendHovered ? 16 : 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.send_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                   ),
-                ],
-              ),
-              child: IconButton(
-                icon: Icon(Icons.send_rounded, color: scheme.onPrimary, size: 22),
-                onPressed: onSend,
-                style: IconButton.styleFrom(
-                  padding: const EdgeInsets.all(12),
-                  minimumSize: const Size(48, 48),
                 ),
               ),
             ),
