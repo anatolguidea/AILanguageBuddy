@@ -10,6 +10,9 @@ import com.example.ailanguagebuddy.security.AuthUserResolver;
 import com.example.ailanguagebuddy.service.ChatService;
 import com.example.ailanguagebuddy.service.VoiceServiceClient;
 import com.example.ailanguagebuddy.domain.LearningContext;
+import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -22,6 +25,8 @@ import java.time.format.DateTimeParseException;
 @RestController
 @RequestMapping("/api/v1/chat")
 public class ChatController {
+
+        private static final Logger log = LoggerFactory.getLogger(ChatController.class);
 
         private final ChatService chatService;
         private final AuthUserResolver authUserResolver;
@@ -39,9 +44,9 @@ public class ChatController {
         @PostMapping("/ask")
         public ResponseEntity<ChatAskResponse> ask(
                         @AuthenticationPrincipal Jwt jwt,
-                        @RequestBody ChatAskRequest request) {
+                        @Valid @RequestBody ChatAskRequest request) {
                 var user = authUserResolver.fromJwt(jwt);
-                System.out.println(">>> DEBUG: /ask called by User: " + user.userId());
+                log.debug("/ask called: userId={}", user.userId());
 
                 var ctx = new LearningContext(
                                 request.targetLanguage(),
@@ -133,6 +138,8 @@ public class ChatController {
                 return ResponseEntity.ok(items);
         }
 
+        private static final int MAX_HISTORY_LIMIT = 500;
+
         @GetMapping("/history/v2")
         public ResponseEntity<ChatHistoryResponse> historyV2(
                         @AuthenticationPrincipal Jwt jwt,
@@ -140,7 +147,8 @@ public class ChatController {
                         @RequestParam(name = "cursor", required = false) String cursor,
                         @RequestParam(defaultValue = "general") String mode) {
                 var user = authUserResolver.fromJwt(jwt);
-                System.out.println(">>> DEBUG: /history/v2 called by User: " + user.userId() + " Mode: " + mode);
+                int safeLimit = Math.max(1, Math.min(limit, MAX_HISTORY_LIMIT));
+                log.debug("/history/v2: userId={} mode={} limit={}", user.userId(), mode, safeLimit);
 
                 LocalDateTime before = null;
                 if (cursor != null && !cursor.isBlank()) {
@@ -152,13 +160,12 @@ public class ChatController {
                         }
                 }
 
-                var raw = chatService.loadHistoryPage(user.userId(), mode, limit, before);
-                System.out.println(">>> DEBUG: Found " + raw.size() + " messages for User: " + user.userId());
+                var raw = chatService.loadHistoryPage(user.userId(), mode, safeLimit, before);
+                log.debug("/history/v2: found {} messages userId={}", raw.size(), user.userId());
 
-                boolean hasMore = raw.size() > limit;
-                var pageItems = hasMore ? raw.subList(0, limit) : raw;
+                boolean hasMore = raw.size() > safeLimit;
+                var pageItems = hasMore ? raw.subList(0, safeLimit) : raw;
 
-                // reverse for chronological order (oldest first)
                 var items = pageItems.stream()
                                 .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()))
                                 .map(m -> new ChatMessageDto(
@@ -173,7 +180,6 @@ public class ChatController {
 
                 String nextCursor = null;
                 if (hasMore && !items.isEmpty()) {
-                        // earliest item in this page becomes the "before" cursor for the next page
                         var earliest = items.get(0).createdAt();
                         nextCursor = earliest != null ? earliest.toString() : null;
                 }

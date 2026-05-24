@@ -11,8 +11,23 @@ USE_EDGE_TTS = os.getenv("USE_EDGE_TTS", "true").lower() in ("true", "1", "yes")
 # Enable English-only turbo TTS (Chatterbox) for live speech while using Edge-TTS for other languages.
 USE_EN_TURBO = os.getenv("USE_EN_TURBO", "false").lower() in ("true", "1", "yes")
 
-# Device for Chatterbox when used (e.g. "mps", "cuda", "cpu")
-MODEL_DEVICE = os.getenv("MODEL_DEVICE", "mps")
+# Device for Chatterbox when used (e.g. "mps", "cuda", "cpu").
+# Auto-detected when MODEL_DEVICE env var is not set: mps → cuda → cpu.
+def _detect_device() -> str:
+    explicit = os.getenv("MODEL_DEVICE", "").strip()
+    if explicit:
+        return explicit
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return "mps"
+        if torch.cuda.is_available():
+            return "cuda"
+    except Exception:
+        pass
+    return "cpu"
+
+MODEL_DEVICE = _detect_device()
 
 # Stream chunk size for raw PCM streaming (Chatterbox path)
 STREAM_CHUNK_BYTES = 8 * 1024

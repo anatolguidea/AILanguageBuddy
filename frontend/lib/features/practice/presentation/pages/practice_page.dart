@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -8,7 +9,6 @@ import '../../../../core/l10n/app_strings.dart';
 import 'package:ailanguageapp/features/settings/presentation/providers/app_locale_provider.dart';
 import '../../../settings/presentation/providers/language_provider.dart';
 import '../../data/topic_repository.dart';
-import '../../domain/entities/custom_topic.dart';
 import '../providers/custom_topics_provider.dart';
 import '../widgets/practice_header.dart';
 import '../widgets/practice_banner.dart';
@@ -23,7 +23,7 @@ class PracticePage extends ConsumerStatefulWidget {
 }
 
 class _PracticePageState extends ConsumerState<PracticePage> {
-  bool _showAllTopics = true; // true = All topics, false = Custom
+  bool _showAllTopics = true;
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +33,7 @@ class _PracticePageState extends ConsumerState<PracticePage> {
     final customTopicsAsync = ref.watch(customTopicsProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final scheme = theme.colorScheme;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
@@ -43,206 +44,165 @@ class _PracticePageState extends ConsumerState<PracticePage> {
             children: [
               RefreshIndicator(
                 onRefresh: () async {
-                  ref.refresh(topicsProvider.future);
+                  await ref.refresh(topicsProvider.future);
                   ref.read(customTopicsProvider.notifier).load();
                 },
-                color: Theme.of(context).colorScheme.primary,
-                child: SingleChildScrollView(
+                color: scheme.primary,
+                child: CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 20,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      PracticeHeader(
-                        streakCount: 0,
-                        title: s.practice,
-                        upgradeLabel: s.upgrade,
-                        onUpgrade: () {
-                          // TODO: Navigate to upgrade / paywall
-                        },
-                      ),
-                      const SizedBox(height: 24),
-                      // All topics / Custom segmented control
-                      Row(
-                        children: [
-                          _SegmentChip(
-                            label: s.allTopics,
-                            selected: _showAllTopics,
-                            onTap: () => setState(() => _showAllTopics = true),
-                          ),
-                          const SizedBox(width: 12),
-                          _SegmentChip(
-                            label: s.custom,
-                            selected: !_showAllTopics,
-                            onTap: () => setState(() => _showAllTopics = false),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      PracticeBanner(
-                        title: s.wordOfTheDay,
-                        subtitle: s.checkTodays,
-                        onTap: () {
-                          // TODO: Implement word of the day modal
-                        },
-                      ),
-                      const SizedBox(height: 24),
-                      if (_showAllTopics) ...[
-                        topicsAsync.when(
-                          data: (topics) => ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: topics.length,
-                            itemBuilder: (context, index) {
-                              final topic = topics[index];
-                              return TopicTile(
-                                topicId: topic.id,
-                                title: topic.title,
-                                icon: topic.icon,
-                                onTap: () {
-                                  ref
-                                      .read(
-                                        currentTopicLanguageProvider.notifier,
-                                      )
-                                      .state = topic
-                                      .languageCode;
-                                  context.push(topic.route);
-                                },
-                              );
+                  slivers: [
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+                      sliver: SliverList(
+                        delegate: SliverChildListDelegate([
+                          PracticeHeader(
+                            streakCount: 0,
+                            title: s.practice,
+                            upgradeLabel: s.upgrade,
+                            onUpgrade: () {
+                              // TODO: Navigate to upgrade / paywall
+                            },
+                          ).animate().fadeIn(duration: 300.ms),
+                          const SizedBox(height: 20),
+
+                          // Segment control
+                          _SegmentedControl(
+                            labels: [s.allTopics, s.custom],
+                            selectedIndex: _showAllTopics ? 0 : 1,
+                            onChanged: (i) => setState(() => _showAllTopics = i == 0),
+                          ).animate(delay: 80.ms).fadeIn(duration: 300.ms),
+                          const SizedBox(height: 16),
+
+                          // Banner
+                          PracticeBanner(
+                            title: s.wordOfTheDay,
+                            subtitle: s.checkTodays,
+                            onTap: () {
+                              // TODO: Implement word of the day modal
                             },
                           ),
-                          loading: () => Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(20.0),
-                              child: CircularProgressIndicator(
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                          ),
-                          error: (err, stack) => Center(
-                            child: Text(
-                              s.errorLoadingTopics,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                            ),
+                          const SizedBox(height: 20),
+                        ]),
+                      ),
+                    ),
+
+                    // Topic list
+                    if (_showAllTopics)
+                      topicsAsync.when(
+                        data: (topics) => SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+                          sliver: SliverList.builder(
+                            itemCount: topics.length,
+                            itemBuilder: (context, index) => TopicTile(
+                              topicId: topics[index].id,
+                              title: topics[index].title,
+                              icon: topics[index].icon,
+                              onTap: () {
+                                ref
+                                    .read(currentTopicLanguageProvider.notifier)
+                                    .state = topics[index].languageCode;
+                                context.push(topics[index].route);
+                              },
+                            )
+                                .animate(delay: Duration(milliseconds: 50 + index * 30))
+                                .fadeIn(duration: 250.ms)
+                                .slideY(begin: 0.08, end: 0, duration: 250.ms),
                           ),
                         ),
-                      ] else ...[
-                        customTopicsAsync.when(
-                          data: (customTopics) {
-                            if (customTopics.isEmpty) {
-                              return _CustomEmptyState(
-                                message: s.noCustomTopicsYet,
-                                addLabel: s.createTopic,
-                                onAddTap: () =>
-                                    context.push('/practice/custom/create'),
-                              );
-                            }
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 12),
+                        loading: () => SliverPadding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          sliver: SliverList.builder(
+                            itemCount: 6,
+                            itemBuilder: (_, i) => _TopicSkeleton(isDark: isDark)
+                                .animate(delay: Duration(milliseconds: i * 40))
+                                .fadeIn(duration: 300.ms),
+                          ),
+                        ),
+                        error: (err, _) => SliverToBoxAdapter(
+                          child: _ErrorState(
+                            message: s.errorLoadingTopics,
+                            onRetry: () => ref.refresh(topicsProvider.future),
+                            retryLabel: s.retry,
+                          ),
+                        ),
+                      )
+                    else
+                      customTopicsAsync.when(
+                        data: (customTopics) {
+                          if (customTopics.isEmpty) {
+                            return SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+                                child: _CustomEmptyState(
+                                  message: s.noCustomTopicsYet,
+                                  addLabel: s.createTopic,
+                                  onAddTap: () => context.push('/practice/custom/create'),
+                                ),
+                              ),
+                            );
+                          }
+                          return SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+                            sliver: SliverList(
+                              delegate: SliverChildListDelegate([
+                                Align(
+                                  alignment: Alignment.centerLeft,
                                   child: TextButton.icon(
-                                    onPressed: () =>
-                                        context.push('/practice/custom/create'),
-                                    icon: const Icon(
-                                      Icons.add,
-                                      color: AppColors.primary,
-                                      size: 20,
-                                    ),
+                                    onPressed: () => context.push('/practice/custom/create'),
+                                    icon: const Icon(Icons.add_rounded, size: 18),
                                     label: Text(s.addTopic),
-                                    style: TextButton.styleFrom(
-                                      foregroundColor: AppColors.primary,
-                                    ),
                                   ),
                                 ),
-                                ListView.builder(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  itemCount: customTopics.length,
-                                  itemBuilder: (context, index) {
-                                    final topic = customTopics[index];
-                                    return TopicTile(
-                                      topicId: 'custom',
-                                      title: topic.title,
-                                      icon: FontAwesomeIcons.lightbulb,
-                                      onTap: () {
-                                        ref
-                                            .read(
-                                              currentTopicLanguageProvider
-                                                  .notifier,
-                                            )
-                                            .state = ref
-                                            .read(languageProvider)
-                                            .code;
-                                        context.push(topic.route);
-                                      },
-                                    );
-                                  },
-                                ),
-                              ],
-                            );
-                          },
-                          loading: () => Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(20.0),
-                              child: CircularProgressIndicator(
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
+                                ...customTopics.asMap().entries.map((entry) {
+                                  final topic = entry.value;
+                                  return TopicTile(
+                                    topicId: 'custom',
+                                    title: topic.title,
+                                    icon: FontAwesomeIcons.lightbulb,
+                                    onTap: () {
+                                      ref
+                                          .read(currentTopicLanguageProvider.notifier)
+                                          .state = ref.read(languageProvider).code;
+                                      context.push(topic.route);
+                                    },
+                                  )
+                                      .animate(
+                                        delay: Duration(milliseconds: entry.key * 30),
+                                      )
+                                      .fadeIn(duration: 250.ms);
+                                }),
+                              ]),
                             ),
-                          ),
-                          error: (e, st) => Center(
-                            child: Text(
-                              s.errorLoadingCustomTopics,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                            ),
+                          );
+                        },
+                        loading: () => SliverPadding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          sliver: SliverList.builder(
+                            itemCount: 4,
+                            itemBuilder: (_, i) => _TopicSkeleton(isDark: isDark),
                           ),
                         ),
-                      ],
-                      const SizedBox(height: 100),
-                    ],
-                  ),
+                        error: (e, _) => SliverToBoxAdapter(
+                          child: _ErrorState(
+                            message: s.errorLoadingCustomTopics,
+                            onRetry: () => ref.read(customTopicsProvider.notifier).load(),
+                            retryLabel: s.retry,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
+
+              // Floating free talk CTA
               Positioned(
                 left: 16,
                 right: 16,
                 bottom: 24,
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () => context.push('/live'),
-                    icon: Icon(
-                      Icons.mic,
-                      color: Theme.of(context).colorScheme.onPrimary,
-                      size: 24,
-                    ),
-                    label: Text(s.startFreeTalk),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      elevation: 8,
-                      shadowColor: Theme.of(
-                        context,
-                      ).colorScheme.primary.withOpacity(0.5),
-                      textStyle: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
+                child: _FreeTalkButton(label: s.startFreeTalk)
+                    .animate(delay: 400.ms)
+                    .fadeIn(duration: 300.ms)
+                    .slideY(begin: 0.3, end: 0, duration: 400.ms, curve: Curves.easeOutBack),
               ),
             ],
           ),
@@ -252,42 +212,206 @@ class _PracticePageState extends ConsumerState<PracticePage> {
   }
 }
 
-class _SegmentChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+class _SegmentedControl extends StatelessWidget {
+  final List<String> labels;
+  final int selectedIndex;
+  final ValueChanged<int> onChanged;
 
-  const _SegmentChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
+  const _SegmentedControl({
+    required this.labels,
+    required this.selectedIndex,
+    required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: selected ? scheme.surfaceContainerHighest : Colors.transparent,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: selected
-                ? null
-                : Border.all(color: scheme.surfaceContainerHighest),
-          ),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: scheme.onSurface,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.surfaceElevated : const Color(0xFFF4F4F5),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: labels.asMap().entries.map((entry) {
+          final selected = entry.key == selectedIndex;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(entry.key),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? (isDark ? AppColors.surfaceDark : Colors.white)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: selected
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : null,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  entry.value,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? scheme.primary : scheme.onSurfaceVariant,
+                    fontFamily: 'Outfit',
+                  ),
+                ),
+              ),
             ),
-          ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _FreeTalkButton extends StatelessWidget {
+  final String label;
+
+  const _FreeTalkButton({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.push('/live'),
+      child: Container(
+        height: 56,
+        decoration: BoxDecoration(
+          gradient: AppColors.primaryGradient,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.4),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.mic_rounded, color: Colors.white, size: 22),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Outfit',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TopicSkeleton extends StatelessWidget {
+  final bool isDark;
+
+  const _TopicSkeleton({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final base = isDark ? AppColors.surfaceDark : const Color(0xFFF4F4F5);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        height: 68,
+        decoration: BoxDecoration(
+          color: base,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 14),
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.surfaceElevated : const Color(0xFFE4E4E7),
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    height: 14,
+                    width: 160,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.surfaceElevated : const Color(0xFFE4E4E7),
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 14),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  final String retryLabel;
+
+  const _ErrorState({
+    required this.message,
+    required this.onRetry,
+    required this.retryLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: scheme.error.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.error_outline_rounded, color: scheme.error, size: 28),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton(
+            onPressed: onRetry,
+            child: Text(retryLabel),
+          ),
+        ],
       ),
     );
   }
@@ -308,21 +432,30 @@ class _CustomEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 32),
+      padding: const EdgeInsets.symmetric(vertical: 48),
       child: Column(
         children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: scheme.primary.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.add_rounded, color: scheme.primary, size: 32),
+          ),
+          const SizedBox(height: 16),
           Text(
             message,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(color: scheme.onSurfaceVariant),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
           ),
-          const SizedBox(height: 8),
-          TextButton.icon(
+          const SizedBox(height: 20),
+          FilledButton(
             onPressed: onAddTap,
-            icon: Icon(Icons.add, color: scheme.primary, size: 20),
-            label: Text(addLabel),
-            style: TextButton.styleFrom(foregroundColor: scheme.primary),
+            child: Text(addLabel),
           ),
         ],
       ),

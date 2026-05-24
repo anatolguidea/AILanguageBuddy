@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+  <!-- Console appender with timestamped pattern -->
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- Async appender wrapping the console appender -->
+  <appender name="ASYNC_CONSOLE" class="ch.qos.logback.classic.AsyncAppender">
+    <queueSize>1000</queueSize>
+    <discardingThreshold>0</discardingThreshold>
+    <appender-ref ref="CONSOLE" />
+  </appender>
+
+  <!-- Application package: DEBUG level -->
+  <logger name="com.example.ailanguagebuddy" level="DEBUG" additivity="false">
+    <appender-ref ref="ASYNC_CONSOLE" />
+  </logger>
+
+  <!-- Default root logger: INFO -->
+  <root level="INFO">
+    <appender-ref ref="ASYNC_CONSOLE" />
+  </root>
+
+  <!-- Production profile: raise root to WARN to reduce noise -->
+  <springProfile name="production">
+    <root level="WARN">
+      <appender-ref ref="ASYNC_CONSOLE" />
+    </root>
+  </springProfile>
+
+</configuration>

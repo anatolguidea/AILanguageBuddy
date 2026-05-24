@@ -31,7 +31,9 @@ public class PromptBuilder {
         String topicsBlock = topicConfigService.getTopicsContextBlock();
         String safeHistory = (historyFromSupabase == null || historyFromSupabase.isBlank()) ? "(no prior history)"
                 : historyFromSupabase;
-        String safeCurrent = (currentMessage == null || currentMessage.isBlank()) ? "(empty input)" : currentMessage;
+        String safeCurrent = (currentMessage == null || currentMessage.isBlank())
+                ? "(empty input)"
+                : sanitizeForPrompt(currentMessage);
         String liveVoiceInstruction = "VOICE_LIVE".equalsIgnoreCase(mode)
                 ? ("You are in LIVE VOICE mode. The user is speaking in " + target + ". You MUST reply ONLY in " + target + ". Do not reply in English unless the target language is English. Example: if target is French and the user says 'Bonjour', reply in French (e.g. 'Bonjour ! Comment allez-vous ?'), never in English.")
                 : "";
@@ -110,5 +112,22 @@ public class PromptBuilder {
 
     private static String orDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    /**
+     * Strips characters that could enable prompt injection before embedding user
+     * input into the system prompt template. Newlines are collapsed so the user
+     * cannot inject new prompt sections; triple-backticks and role-override markers
+     * are removed.
+     */
+    private static String sanitizeForPrompt(String input) {
+        if (input == null) return "(empty input)";
+        return input
+                .replace("\r\n", " ")
+                .replace("\n", " ")
+                .replace("\r", " ")
+                .replace("```", "")
+                .replace("###", "")
+                .trim();
     }
 }

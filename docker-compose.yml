@@ -1,0 +1,42 @@
+services:
+  voice:
+    build:
+      context: ./voice-service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+      - MODEL_DEVICE=${MODEL_DEVICE}
+      - USE_EDGE_TTS=${USE_EDGE_TTS}
+      - MLX_WHISPER_MODEL=${MLX_WHISPER_MODEL}
+    networks:
+      - teza-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+  backend:
+    build:
+      context: ./ailanguagebuddy
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - VOICE_SERVICE_URL=http://voice:8000
+    depends_on:
+      voice:
+        condition: service_healthy
+    networks:
+      - teza-network
+    restart: unless-stopped
+
+networks:
+  teza-network:
+    driver: bridge

@@ -29,6 +29,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final Map<String, String> _translatedMessages = {};
+  final Set<String> _translatingKeys = {};
 
   @override
   void initState() {
@@ -112,6 +114,53 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       }
     }
     return '';
+  }
+
+  String _messageKey(int index, Map<String, dynamic> msg) {
+    return '$index-${msg['role']}-${msg['content']}';
+  }
+
+  Future<void> _translateAiMessage(int index, Map<String, dynamic> msg) async {
+    final key = _messageKey(index, msg);
+    if (_translatingKeys.contains(key)) return;
+    final sourceText = msg['content']?.toString() ?? '';
+    if (sourceText.trim().isEmpty) return;
+    final localeCode = ref.read(appLocaleProvider).toLowerCase();
+    final targetLanguage = localeCode.startsWith('ro') ? 'Romanian' : 'English';
+
+    setState(() {
+      _translatingKeys.add(key);
+    });
+    try {
+      final translated = await ref
+          .read(chatProvider.notifier)
+          .translateMessage(
+            text: sourceText,
+            scenarioId: widget.scenarioId,
+            targetLanguage: targetLanguage,
+          );
+      if (!mounted) return;
+      setState(() {
+        _translatedMessages[key] = translated;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      final locale = ref.read(appLocaleProvider);
+      final s = AppStrings.forLocale(locale);
+      final currentError = ref.read(chatProvider).error;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${s.error}: ${currentError ?? 'Translation failed'}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _translatingKeys.remove(key);
+        });
+      }
+    }
   }
 
   @override
@@ -236,6 +285,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 itemCount: messages.length,
                 itemBuilder: (context, index) {
                   final msg = messages[index];
+                  final key = _messageKey(index, msg);
+                  final cachedTranslation = _translatedMessages[key];
+                  final messageTranslation = msg['translation']?.toString();
                   return ChatBubble(
                     key: ValueKey(
                       'msg-$index-${msg['role']}-${msg['content']}',
@@ -250,11 +302,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     feedbackLabel: s.feedback,
                     correctionLabel: s.correction,
                     tipLabel: s.tip,
+                    translation: cachedTranslation ?? messageTranslation,
+                    isTranslating: _translatingKeys.contains(key),
+                    translateLabel: s.translateThisSentenceLabel,
                     onPlay: msg['role'] == 'user'
                         ? null
                         : () => ref
                               .read(chatProvider.notifier)
                               .speak(msg['content'] ?? ''),
+                    onTranslate: msg['role'] == 'user'
+                        ? null
+                        : () => _translateAiMessage(index, msg),
                   );
                 },
               ),
@@ -311,11 +369,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       ),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? _stitchPrimary.withValues(alpha: 0.12)
+                            ? AppColors.secondary.withValues(alpha: 0.14)
                             : Colors.white,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: _stitchPrimary.withValues(alpha: 0.2),
+                          color: AppColors.secondary.withValues(alpha: 0.28),
                         ),
                       ),
                       child: Row(

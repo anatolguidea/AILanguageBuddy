@@ -55,19 +55,19 @@ class ChatOverviewPage extends StatelessWidget {
           final scenario = _scenarios[index];
           return GestureDetector(
             onTap: () {
-               context.go('/chat/session/${scenario['id']}');
+              context.go('/chat/${scenario['id']}');
             },
             child: Container(
               decoration: BoxDecoration(
                 color: AppColors.surfaceDark,
                 borderRadius: BorderRadius.circular(AppDimensions.radiusLg),
                 border: Border.all(
-                  color: (scenario['color'] as Color).withOpacity(0.3),
+                  color: (scenario['color'] as Color).withValues(alpha: 0.3),
                   width: 1,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withValues(alpha: 0.2),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -79,7 +79,9 @@ class ChatOverviewPage extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: (scenario['color'] as Color).withOpacity(0.1),
+                      color: (scenario['color'] as Color).withValues(
+                        alpha: 0.1,
+                      ),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -102,9 +104,9 @@ class ChatOverviewPage extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 12.0),
                     child: Text(
                       scenario['description'] as String,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.grey),
                       textAlign: TextAlign.center,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,

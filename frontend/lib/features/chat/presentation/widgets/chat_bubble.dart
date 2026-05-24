@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../../../../theme/app_colors.dart';
 import 'grammar_correction_card.dart';
 
 class ChatBubble extends StatefulWidget {
@@ -8,12 +9,16 @@ class ChatBubble extends StatefulWidget {
   final String? correction;
   final String? tips;
   final String? incorrectText;
+  final String? translation;
+  final bool isTranslating;
   final String? sarahLabel;
   final String? listenLabel;
+  final String? translateLabel;
   final String? feedbackLabel;
   final String? correctionLabel;
   final String? tipLabel;
   final VoidCallback? onPlay;
+  final VoidCallback? onTranslate;
 
   const ChatBubble({
     super.key,
@@ -22,12 +27,16 @@ class ChatBubble extends StatefulWidget {
     this.correction,
     this.tips,
     this.incorrectText,
+    this.translation,
+    this.isTranslating = false,
     this.sarahLabel,
     this.listenLabel,
+    this.translateLabel,
     this.feedbackLabel,
     this.correctionLabel,
     this.tipLabel,
     this.onPlay,
+    this.onTranslate,
   });
 
   @override
@@ -45,7 +54,8 @@ class _ChatBubbleState extends State<ChatBubble> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final primary = scheme.primary;
+    final primary = AppColors.primary;
+    final secondary = AppColors.secondary;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final bubbleBg = widget.isUser
@@ -112,8 +122,8 @@ class _ChatBubbleState extends State<ChatBubble> {
                               ),
                         boxShadow: [
                           BoxShadow(
-                            color: primary.withValues(
-                              alpha: widget.isUser ? 0.2 : 0.08,
+                            color: secondary.withValues(
+                              alpha: widget.isUser ? 0.24 : 0.12,
                             ),
                             blurRadius: widget.isUser ? 16 : 10,
                             offset: const Offset(0, 4),
@@ -132,34 +142,118 @@ class _ChatBubbleState extends State<ChatBubble> {
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                          if (!widget.isUser && widget.onPlay != null) ...[
+                          if (!widget.isUser &&
+                              (widget.onPlay != null ||
+                                  widget.onTranslate != null)) ...[
                             const SizedBox(height: 8),
-                            InkWell(
-                              onTap: widget.onPlay,
-                              borderRadius: BorderRadius.circular(999),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.volume_up_rounded,
-                                      size: 16,
-                                      color: primary,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      widget.listenLabel ?? 'Listen',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: primary,
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (widget.onPlay != null)
+                                  InkWell(
+                                    onTap: widget.onPlay,
+                                    borderRadius: BorderRadius.circular(999),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.volume_up_rounded,
+                                            size: 16,
+                                            color: primary,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            widget.listenLabel ?? 'Listen',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                              color: primary,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  ],
+                                  ),
+                                if (widget.onTranslate != null) ...[
+                                  const SizedBox(width: 10),
+                                  InkWell(
+                                    onTap: widget.isTranslating
+                                        ? null
+                                        : widget.onTranslate,
+                                    borderRadius: BorderRadius.circular(999),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (widget.isTranslating)
+                                            SizedBox(
+                                              width: 14,
+                                              height: 14,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: primary,
+                                              ),
+                                            )
+                                          else
+                                            Icon(
+                                              Icons.translate_rounded,
+                                              size: 16,
+                                              color: primary,
+                                            ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            widget.translateLabel ??
+                                                'Translate',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                              color: primary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                          if (!widget.isUser &&
+                              widget.translation != null &&
+                              widget.translation!.trim().isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.secondary.withValues(
+                                  alpha: 0.12,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: AppColors.secondary.withValues(
+                                    alpha: 0.24,
+                                  ),
+                                ),
+                              ),
+                              child: Text(
+                                widget.translation!,
+                                style: TextStyle(
+                                  color: scheme.onSurface,
+                                  fontSize: 12,
+                                  height: 1.35,
                                 ),
                               ),
                             ),
@@ -202,8 +296,6 @@ class _ChatBubbleState extends State<ChatBubble> {
                             ),
                         ],
                       ),
-                      const SizedBox(height: 10),
-                      const _WeeklyProgressCard(),
                     ],
                   ],
                 ),
@@ -237,7 +329,7 @@ class _Avatar extends StatelessWidget {
         shape: BoxShape.circle,
         color: isUser
             ? scheme.surfaceContainerHighest
-            : primary.withValues(alpha: 0.12),
+            : AppColors.secondary.withValues(alpha: 0.14),
         border: Border.all(color: primary.withValues(alpha: 0.3), width: 2),
       ),
       alignment: Alignment.center,
@@ -290,74 +382,3 @@ class _FeedbackPill extends StatelessWidget {
   }
 }
 
-class _WeeklyProgressCard extends StatelessWidget {
-  const _WeeklyProgressCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final primary = scheme.primary;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? primary.withValues(alpha: 0.08)
-            : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: primary.withValues(alpha: 0.16)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Weekly Progress',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: scheme.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Your accuracy is improving this week.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: scheme.onSurface.withValues(alpha: 0.72),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 54,
-            height: 54,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                CircularProgressIndicator(
-                  value: 0.88,
-                  strokeWidth: 5,
-                  color: primary,
-                  backgroundColor: primary.withValues(alpha: 0.15),
-                ),
-                Text(
-                  '88%',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: primary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

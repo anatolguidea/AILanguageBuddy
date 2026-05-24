@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../theme/app_colors.dart';
 
 class ChatInputBar extends StatefulWidget {
   final TextEditingController controller;
@@ -31,14 +32,17 @@ class _ChatInputBarState extends State<ChatInputBar> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final primary = scheme.primary;
+    final primary = AppColors.primary;
+    final secondary = AppColors.secondary;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF000000) : Colors.white,
-        border: Border(top: BorderSide(color: primary.withValues(alpha: 0.2))),
+        border: Border(
+          top: BorderSide(color: secondary.withValues(alpha: 0.24)),
+        ),
       ),
       child: SafeArea(
         top: false,
@@ -51,7 +55,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
               margin: const EdgeInsets.only(right: 8),
               decoration: BoxDecoration(
                 color: isDark
-                    ? primary.withValues(alpha: 0.08)
+                    ? secondary.withValues(alpha: 0.12)
                     : Colors.transparent,
                 shape: BoxShape.circle,
               ),
@@ -68,10 +72,10 @@ class _ChatInputBarState extends State<ChatInputBar> {
                 constraints: const BoxConstraints(minHeight: 48),
                 decoration: BoxDecoration(
                   color: isDark
-                      ? primary.withValues(alpha: 0.08)
+                      ? secondary.withValues(alpha: 0.1)
                       : const Color(0xFFF3F0F6),
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: primary.withValues(alpha: 0.15)),
+                  border: Border.all(color: secondary.withValues(alpha: 0.24)),
                 ),
                 child: Row(
                   children: [
@@ -100,6 +104,9 @@ class _ChatInputBarState extends State<ChatInputBar> {
                         ),
                         minLines: 1,
                         maxLines: 4,
+                        maxLength: 2000,
+                        buildCounter: (_, {required currentLength, required isFocused, maxLength}) =>
+                            null,
                         textInputAction: TextInputAction.send,
                         onSubmitted: (_) => widget.onSend(),
                       ),
@@ -142,7 +149,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
                       boxShadow: [
                         BoxShadow(
                           color: primary.withValues(
-                            alpha: _sendHovered ? 0.45 : 0.3,
+                            alpha: _sendHovered ? 0.5 : 0.36,
                           ),
                           blurRadius: _sendHovered ? 16 : 12,
                           offset: const Offset(0, 6),

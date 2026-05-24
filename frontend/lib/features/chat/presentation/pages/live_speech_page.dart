@@ -70,7 +70,7 @@ final voiceReconnectOnLanguageChangeProvider = Provider<void>((ref) {
   });
 });
 
-enum VoiceState { idle, listening, processing, speaking, error }
+enum VoiceState { idle, warming, listening, processing, speaking, error }
 
 class LiveSpeechState {
   final VoiceState status;
@@ -153,20 +153,21 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
       }
       final raw = targetLanguageCode ?? _ref.read(languageProvider).code;
       final langCode = _normalizeLangCode(raw);
+      state = state.copyWith(status: VoiceState.warming, errorMessage: null);
       await _prewarmVoiceBackend(accessToken, langCode);
       final url = _getWsUrl(langCode);
       final protocols = <String>['voice.v1', 'bearer.$accessToken'];
-      print('Attempting to connect to WS (secured subprotocol auth)');
+      debugPrint('Attempting to connect to WS (secured subprotocol auth)');
       _channel = WebSocketChannel.connect(Uri.parse(url), protocols: protocols);
-      await _channel!.ready; // Wait for connection to be established
-      print('WebSocket Connection Established');
+      await _channel!.ready;
+      debugPrint('WebSocket Connection Established');
       SemanticsService.announce('Voice WebSocket connected', TextDirection.ltr);
       state = state.copyWith(status: VoiceState.idle, errorMessage: null);
 
       _channel!.stream.listen(
         (message) {
           if (message is String) {
-            print('WS Text: $message');
+            debugPrint('WS Text: $message');
             if (message.startsWith('AUDIO:')) {
               final rest = message.substring(6);
               final parts = rest.split(',');
@@ -179,21 +180,21 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
               state = state.copyWith(lastTranscript: text);
             }
           } else {
-            print(
+            debugPrint(
               'WS Binary: ${message.runtimeType} length: ${(message as List).length}',
             );
             _playAudio(message);
           }
         },
         onError: (error) {
-          print('WS Error callback: $error');
+          debugPrint('WS Error callback: $error');
           state = state.copyWith(
             status: VoiceState.error,
             errorMessage: "WS Error: $error",
           );
         },
         onDone: () {
-          print('WS Closed');
+          debugPrint('WS Closed');
           state = state.copyWith(
             status: VoiceState.idle,
             errorMessage: "Disconnected",
@@ -201,7 +202,7 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
         },
       );
     } catch (e) {
-      print('WS Connection Exception: $e');
+      debugPrint('WS Connection Exception: $e');
       state = state.copyWith(
         status: VoiceState.error,
         errorMessage: "Conn Error: $e",
@@ -226,10 +227,10 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
           )
           .timeout(const Duration(seconds: 10))
           .then((_) {
-            print('Voice prewarm completed successfully');
+            debugPrint('Voice prewarm completed successfully');
           });
     } catch (e) {
-      print('Voice prewarm failed: $e');
+      debugPrint('Voice prewarm failed: $e');
     }
   }
 
@@ -296,7 +297,7 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
 
     // Send End-Of-Speech signal
     if (_channel != null) {
-      print("Sending EOS signal");
+      debugPrint('Sending EOS signal');
       _channel!.sink.add("EOS");
     }
 
@@ -416,14 +417,51 @@ class LiveSpeechPage extends ConsumerWidget {
     });
 
     final isRecording = speechState.status == VoiceState.listening;
+    final isWarming  = speechState.status == VoiceState.warming;
     final voiceButtonLabel = isRecording
         ? 'Stop recording and process audio'
-        : 'Start voice recording';
+        : isWarming
+            ? 'Voice models warming up, please wait'
+            : 'Start voice recording';
     final voiceButtonHint = isRecording
         ? 'Release to stop recording and send audio for processing'
-        : 'Press and hold to record your voice';
+        : isWarming
+            ? 'Models are loading, please wait a moment'
+            : 'Press and hold to record your voice';
 
-    return Scaffold(
+    final isActiveSession = speechState.status == VoiceState.listening ||
+        speechState.status == VoiceState.processing ||
+        speechState.status == VoiceState.speaking;
+
+    return PopScope(
+      canPop: !isActiveSession,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('End voice session?'),
+            content: const Text(
+              'The voice session is still active. Are you sure you want to leave?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Stay'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Leave'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed == true && context.mounted) {
+          notifier.disconnect();
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
       backgroundColor: scheme.surface,
       appBar: AppBar(
         backgroundColor: scheme.surface,
@@ -521,9 +559,8 @@ class LiveSpeechPage extends ConsumerWidget {
                             label: voiceButtonLabel,
                             hint: voiceButtonHint,
                             child: GestureDetector(
-                              onLongPressStart: (_) =>
-                                  notifier.startRecording(),
-                              onLongPressEnd: (_) => notifier.stopRecording(),
+                              onLongPressStart: isWarming ? null : (_) => notifier.startRecording(),
+                              onLongPressEnd: isWarming ? null : (_) => notifier.stopRecording(),
                               child: ConstrainedBox(
                                 constraints: const BoxConstraints(
                                   minWidth: 48,
@@ -618,62 +655,49 @@ class LiveSpeechPage extends ConsumerWidget {
           },
         ),
       ),
+    ),
     );
   }
 
   Color _getColor(VoiceState status, ColorScheme scheme) {
-    switch (status) {
-      case VoiceState.listening:
-        return scheme.primary;
-      case VoiceState.processing:
-        return AppColors.secondary;
-      case VoiceState.speaking:
-        return Colors.green;
-      case VoiceState.error:
-        return scheme.error;
-      default:
-        return scheme.surfaceContainerHighest;
-    }
+    return switch (status) {
+      VoiceState.listening  => scheme.primary,
+      VoiceState.processing => AppColors.secondary,
+      VoiceState.speaking   => Colors.green,
+      VoiceState.error      => scheme.error,
+      VoiceState.warming    => Colors.orange,
+      VoiceState.idle       => scheme.surfaceContainerHighest,
+    };
   }
 
   IconData _getIcon(VoiceState status) {
-    switch (status) {
-      case VoiceState.listening:
-        return FontAwesomeIcons.microphoneLines;
-      case VoiceState.processing:
-        return FontAwesomeIcons.brain;
-      case VoiceState.speaking:
-        return FontAwesomeIcons.volumeHigh;
-      default:
-        return FontAwesomeIcons.microphone;
-    }
+    return switch (status) {
+      VoiceState.listening  => FontAwesomeIcons.microphoneLines,
+      VoiceState.processing => FontAwesomeIcons.brain,
+      VoiceState.speaking   => FontAwesomeIcons.volumeHigh,
+      VoiceState.warming    => FontAwesomeIcons.hourglass,
+      VoiceState.idle || VoiceState.error => FontAwesomeIcons.microphone,
+    };
   }
 
   Color _getIconColor(VoiceState status, ColorScheme scheme) {
-    switch (status) {
-      case VoiceState.listening:
-        return scheme.onPrimary;
-      case VoiceState.processing:
-        return scheme.onSecondary;
-      case VoiceState.speaking:
-        return Colors.white;
-      case VoiceState.error:
-        return scheme.onError;
-      default:
-        return scheme.onSurface;
-    }
+    return switch (status) {
+      VoiceState.listening  => scheme.onPrimary,
+      VoiceState.processing => scheme.onSecondary,
+      VoiceState.speaking   => Colors.white,
+      VoiceState.error      => scheme.onError,
+      VoiceState.warming    => Colors.white,
+      VoiceState.idle       => scheme.onSurface,
+    };
   }
 
   String _getStatusText(VoiceState status, AppStringsData s) {
-    switch (status) {
-      case VoiceState.listening:
-        return s.listening;
-      case VoiceState.processing:
-        return s.liveThinking;
-      case VoiceState.speaking:
-        return s.liveSpeaking;
-      default:
-        return s.tapHoldToSpeak;
-    }
+    return switch (status) {
+      VoiceState.listening  => s.listening,
+      VoiceState.processing => s.liveThinking,
+      VoiceState.speaking   => s.liveSpeaking,
+      VoiceState.warming    => 'Warming up…',
+      VoiceState.idle || VoiceState.error => s.tapHoldToSpeak,
+    };
   }
 }

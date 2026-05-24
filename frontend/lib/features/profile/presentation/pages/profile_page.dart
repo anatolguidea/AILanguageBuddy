@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../../theme/app_colors.dart';
-import '../../../../core/constants/app_dimensions.dart';
 import '../../../../core/l10n/app_strings.dart';
 import '../../../auth/presentation/auth_state.dart';
 import '../widgets/profile_list_tile.dart';
@@ -17,7 +17,7 @@ void _showAppLanguagePicker(BuildContext context, WidgetRef ref) {
     context: context,
     backgroundColor: Theme.of(context).colorScheme.surface,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (ctx) => SafeArea(
       child: Padding(
@@ -25,37 +25,30 @@ void _showAppLanguagePicker(BuildContext context, WidgetRef ref) {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: ExcludeSemantics(
-                child: Icon(
-                  current == AppLocaleNotifier.en
-                      ? Icons.check_circle
-                      : Icons.circle_outlined,
-                  color: current == AppLocaleNotifier.en
-                      ? Theme.of(ctx).colorScheme.primary
-                      : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.5),
-                  size: 22,
-                ),
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Theme.of(ctx).colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
               ),
-              title: const Text('English'),
+            ),
+            _LanguageOption(
+              locale: AppLocaleNotifier.en,
+              label: 'English',
+              flag: '🇬🇧',
+              isSelected: current == AppLocaleNotifier.en,
               onTap: () {
                 notifier.setLocale(AppLocaleNotifier.en);
                 if (context.mounted) Navigator.of(context).pop();
               },
             ),
-            ListTile(
-              leading: ExcludeSemantics(
-                child: Icon(
-                  current == AppLocaleNotifier.ro
-                      ? Icons.check_circle
-                      : Icons.circle_outlined,
-                  color: current == AppLocaleNotifier.ro
-                      ? Theme.of(ctx).colorScheme.primary
-                      : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.5),
-                  size: 22,
-                ),
-              ),
-              title: const Text('Română'),
+            _LanguageOption(
+              locale: AppLocaleNotifier.ro,
+              label: 'Română',
+              flag: '🇷🇴',
+              isSelected: current == AppLocaleNotifier.ro,
               onTap: () {
                 notifier.setLocale(AppLocaleNotifier.ro);
                 if (context.mounted) Navigator.of(context).pop();
@@ -66,6 +59,41 @@ void _showAppLanguagePicker(BuildContext context, WidgetRef ref) {
       ),
     ),
   );
+}
+
+class _LanguageOption extends StatelessWidget {
+  final String locale;
+  final String label;
+  final String flag;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _LanguageOption({
+    required this.locale,
+    required this.label,
+    required this.flag,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListTile(
+      onTap: onTap,
+      leading: Text(flag, style: const TextStyle(fontSize: 26)),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          color: isSelected ? scheme.primary : scheme.onSurface,
+        ),
+      ),
+      trailing: isSelected
+          ? Icon(Icons.check_rounded, color: scheme.primary, size: 20)
+          : null,
+    );
+  }
 }
 
 class ProfilePage extends ConsumerWidget {
@@ -81,149 +109,265 @@ class ProfilePage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(title: Text(s.profile)),
+      appBar: AppBar(
+        title: Text(s.profile),
+        centerTitle: false,
+      ),
       body: userAsync.when(
         data: (user) {
           if (user == null) {
             return Center(child: Text(s.notLoggedIn));
           }
           final email = user.email ?? s.noEmail;
+          final initials = email.isNotEmpty
+              ? email.substring(0, 1).toUpperCase()
+              : '?';
 
-          return FocusTraversalGroup(
-            policy: OrderedTraversalPolicy(),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppDimensions.md),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: 20),
-                  ExcludeSemantics(
-                    child: CircleAvatar(
-                      radius: 50,
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                      child: const Icon(
-                        FontAwesomeIcons.userAstronaut,
-                        size: 50,
-                      ),
+          return SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              children: [
+                const SizedBox(height: 24),
+
+                // Avatar
+                _ProfileAvatar(initials: initials)
+                    .animate()
+                    .scale(
+                      begin: const Offset(0.8, 0.8),
+                      duration: 400.ms,
+                      curve: Curves.easeOutBack,
+                    ),
+                const SizedBox(height: 16),
+
+                // Email
+                Text(
+                  email,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                  textAlign: TextAlign.center,
+                ).animate(delay: 100.ms).fadeIn(duration: 300.ms),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Free plan',
+                    style: TextStyle(
+                      color: AppColors.success,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'Outfit',
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  FocusTraversalOrder(
-                    order: const NumericFocusOrder(1),
-                    child: Semantics(
-                      header: true,
-                      label: 'Profile email',
-                      child: Text(
-                        email,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                ).animate(delay: 150.ms).fadeIn(duration: 300.ms),
+                const SizedBox(height: 28),
+
+                // Stats row
+                _StatsRow()
+                    .animate(delay: 200.ms)
+                    .fadeIn(duration: 300.ms)
+                    .slideY(begin: 0.1, end: 0, duration: 300.ms),
+                const SizedBox(height: 28),
+
+                // Settings section
+                ProfileSection(
+                  title: s.settings,
+                  children: [
+                    ProfileListTile(
+                      icon: FontAwesomeIcons.globe,
+                      title: s.appLanguage,
+                      subtitle: locale.startsWith('ro') ? 'Română' : 'English',
+                      onTap: () => _showAppLanguagePicker(context, ref),
                     ),
-                  ),
-                  const SizedBox(height: 32),
+                    ProfileListTile(
+                      icon: FontAwesomeIcons.language,
+                      title: s.languagePreferences,
+                      onTap: () {},
+                    ),
+                    ProfileListTile(
+                      icon: FontAwesomeIcons.bell,
+                      title: s.notifications,
+                      onTap: () {},
+                    ),
+                    _DarkThemeSwitchTile(
+                      title: s.darkTheme,
+                      value: isDark,
+                      onChanged: (value) =>
+                          ref.read(themeModeProvider.notifier).setDark(value),
+                    ),
+                  ],
+                ).animate(delay: 250.ms).fadeIn(duration: 300.ms),
+                const SizedBox(height: 20),
 
-                  ProfileSection(
-                    title: s.settings,
-                    children: [
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(2),
-                        child: Semantics(
-                          button: true,
-                          label: 'App language',
-                          value: locale.startsWith('ro')
-                              ? 'Romanian'
-                              : 'English',
-                          child: ProfileListTile(
-                            icon: FontAwesomeIcons.globe,
-                            title: s.appLanguage,
-                            subtitle: locale.startsWith('ro')
-                                ? 'Română'
-                                : 'English',
-                            onTap: () => _showAppLanguagePicker(context, ref),
-                          ),
-                        ),
-                      ),
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(3),
-                        child: Semantics(
-                          button: true,
-                          label: 'Edit profile language preferences',
-                          child: ProfileListTile(
-                            icon: FontAwesomeIcons.language,
-                            title: s.languagePreferences,
-                            onTap: () {},
-                          ),
-                        ),
-                      ),
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(4),
-                        child: Semantics(
-                          button: true,
-                          label: 'Edit profile notifications',
-                          child: ProfileListTile(
-                            icon: FontAwesomeIcons.bell,
-                            title: s.notifications,
-                            onTap: () {},
-                          ),
-                        ),
-                      ),
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(5),
-                        child: Semantics(
-                          button: true,
-                          label: 'Notifications',
-                          child: ProfileListTile(
-                            icon: FontAwesomeIcons.bell,
-                            title: s.notifications,
-                            onTap: () {},
-                          ),
-                        ),
-                      ),
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(6),
-                        child: _DarkThemeSwitchTile(
-                          title: s.darkTheme,
-                          value: isDark,
-                          onChanged: (value) => ref
-                              .read(themeModeProvider.notifier)
-                              .setDark(value),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  ProfileSection(
-                    title: s.account,
-                    children: [
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(7),
-                        child: Semantics(
-                          button: true,
-                          label: 'Sign out',
-                          child: ProfileListTile(
-                            icon: FontAwesomeIcons.arrowRightFromBracket,
-                            title: s.signOut,
-                            iconColor: AppColors.error,
-                            textColor: AppColors.error,
-                            onTap: () async {
-                              await ref.read(authRepositoryProvider).signOut();
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                // Account section
+                ProfileSection(
+                  title: s.account,
+                  children: [
+                    ProfileListTile(
+                      icon: FontAwesomeIcons.arrowRightFromBracket,
+                      title: s.signOut,
+                      iconColor: AppColors.error,
+                      textColor: AppColors.error,
+                      onTap: () async {
+                        await ref.read(authRepositoryProvider).signOut();
+                      },
+                    ),
+                  ],
+                ).animate(delay: 300.ms).fadeIn(duration: 300.ms),
+                const SizedBox(height: 40),
+              ],
             ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('${s.error}: $err')),
+        loading: () => const Center(
+          child: CircularProgressIndicator(),
+        ),
+        error: (err, _) => Center(
+          child: Text('${s.error}: $err'),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileAvatar extends StatelessWidget {
+  final String initials;
+
+  const _ProfileAvatar({required this.initials});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: 96,
+          height: 96,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: AppColors.primaryGradient,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.35),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            initials,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 36,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Outfit',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatsRow extends StatelessWidget {
+  const _StatsRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Row(
+      children: [
+        _StatCard(
+          icon: Icons.local_fire_department_rounded,
+          value: '0',
+          label: 'Day streak',
+          color: AppColors.accent,
+          isDark: isDark,
+        ),
+        const SizedBox(width: 12),
+        _StatCard(
+          icon: Icons.check_circle_rounded,
+          value: '0',
+          label: 'Lessons done',
+          color: AppColors.success,
+          isDark: isDark,
+        ),
+        const SizedBox(width: 12),
+        _StatCard(
+          icon: Icons.mic_rounded,
+          value: '0',
+          label: 'Voice sessions',
+          color: AppColors.secondary,
+          isDark: isDark,
+        ),
+      ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+  final Color color;
+  final bool isDark;
+
+  const _StatCard({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.color,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.surfaceDark : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark ? AppColors.surfaceElevated : const Color(0xFFE4E4E7),
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 18),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: color,
+                fontFamily: 'Outfit',
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: 10,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -242,28 +386,42 @@ class _DarkThemeSwitchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MergeSemantics(
-      child: Semantics(
-        container: true,
-        button: true,
-        toggled: value,
-        label: title,
-        value: value ? 'On' : 'Off',
-        child: ListTile(
-          leading: ExcludeSemantics(
-            child: Icon(
-              FontAwesomeIcons.moon,
-              color: Theme.of(context).colorScheme.onSurface,
-              size: 20,
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return InkWell(
+      onTap: () => onChanged(!value),
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: isDark ? 0.12 : 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                FontAwesomeIcons.moon,
+                color: scheme.onSurface,
+                size: 16,
+              ),
             ),
-          ),
-          title: Text(
-            title,
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-          ),
-          trailing: Switch(value: value, onChanged: onChanged),
-          minVerticalPadding: 12,
-          onTap: () => onChanged(!value),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 15),
+              ),
+            ),
+            Switch(
+              value: value,
+              onChanged: onChanged,
+              activeThumbColor: AppColors.primary,
+            ),
+          ],
         ),
       ),
     );

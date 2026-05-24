@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../theme/app_colors.dart';
 
 class GrammarCorrectionCard extends StatelessWidget {
   final String incorrectText;
@@ -17,7 +18,8 @@ class GrammarCorrectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final primary = scheme.primary;
+    final primary = AppColors.primary;
+    final secondary = AppColors.secondary;
     final incorrect = incorrectText.trim().isEmpty ? '—' : incorrectText.trim();
     final corrected = correctedText.trim().isEmpty ? '—' : correctedText.trim();
 
@@ -25,9 +27,9 @@ class GrammarCorrectionCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: primary.withValues(alpha: 0.05),
+        color: secondary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: primary.withValues(alpha: 0.2)),
+        border: Border.all(color: secondary.withValues(alpha: 0.26)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -9,7 +9,7 @@ class ScenariosPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundBlack,
+      backgroundColor: AppColors.backgroundDark,
       appBar: AppBar(
         title: const Text('Choose Scenario'),
         backgroundColor: Colors.transparent,

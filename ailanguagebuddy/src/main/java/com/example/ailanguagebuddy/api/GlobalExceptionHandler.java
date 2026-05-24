@@ -8,6 +8,9 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -23,7 +26,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> validation(MethodArgumentNotValidException e) {
-        return ResponseEntity.badRequest().body(ApiError.of("Validation failed", "VALIDATION_ERROR"));
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        e.getBindingResult().getFieldErrors().forEach(error ->
+                fieldErrors.putIfAbsent(error.getField(), error.getDefaultMessage()));
+        return ResponseEntity.badRequest().body(ApiError.validation(fieldErrors));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -38,4 +44,3 @@ public class GlobalExceptionHandler {
                 .body(ApiError.of("Internal server error", "INTERNAL_ERROR"));
     }
 }
-

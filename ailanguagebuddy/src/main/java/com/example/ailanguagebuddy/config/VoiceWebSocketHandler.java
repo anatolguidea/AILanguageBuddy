@@ -63,7 +63,7 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
         if (query != null) {
             for (String param : query.split("&")) {
                 if (param.startsWith("targetLanguage=")) {
-                    String raw = param.substring(14).split("&")[0].trim();
+                    String raw = param.substring("targetLanguage=".length()).trim();
                     if (raw.isEmpty()) {
                         raw = "en";
                     }
@@ -110,7 +110,7 @@ public class VoiceWebSocketHandler extends BinaryWebSocketHandler {
                 buffer.write(message.getPayload().array());
             }
         } catch (Exception e) {
-            System.err.println("Error buffering audio: " + e.getMessage());
+            log.error("Error buffering audio for session {}: {}", session.getId(), e.getMessage(), e);
         }
     }
 

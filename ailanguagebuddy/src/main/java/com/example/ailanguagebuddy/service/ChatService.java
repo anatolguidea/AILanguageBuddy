@@ -153,44 +153,58 @@ public class ChatService {
             return new AiTutorResult("No reply received from AI.", null, null, null, List.of(), List.of());
         }
 
-        String trimmed = raw.trim();
-        // Strip markdown code block if present
-        if (trimmed.startsWith("```")) {
-            int start = trimmed.indexOf('{');
-            int end = trimmed.lastIndexOf('}');
-            if (start >= 0 && end > start) trimmed = trimmed.substring(start, end + 1);
-        }
-        // Fix invalid JSON: LLM often outputs \' inside strings; JSON only allows \"
-        String sanitized = trimmed.replace("\\'", "'");
-
-        if (sanitized.startsWith("{")) {
+        // Extract the first JSON object from the response.
+        // Handles: plain JSON, markdown-wrapped (```json ... ```), and JSON embedded in prose.
+        String jsonCandidate = extractJsonObject(raw);
+        if (jsonCandidate != null) {
+            // LLMs sometimes emit \' which is not valid JSON — normalize before parsing.
+            String normalizedCandidate = jsonCandidate.replace("\\'", "'");
             try {
-                var node = objectMapper.readTree(sanitized);
+                var node = objectMapper.readTree(normalizedCandidate);
                 if (node.isObject()) {
-                    String replyText = node.has("reply")
-                            ? node.path("reply").asText("").trim()
-                            : node.path("replyText").asText("").trim();
-                    if (replyText.isEmpty()) replyText = raw;
-                    String correction = node.has("correction") && !node.path("correction").isNull()
-                            ? node.path("correction").asText("").trim()
-                            : null;
-                    String translation = node.has("translation") && !node.path("translation").isNull()
-                            ? node.path("translation").asText("").trim()
-                            : null;
-                    String tips = node.has("tips") && !node.path("tips").isNull()
-                            ? node.path("tips").asText("").trim()
-                            : null;
-                    if (translation != null && translation.isEmpty()) translation = null;
-                    if (correction != null && correction.isEmpty()) correction = null;
-                    if (tips != null && tips.isEmpty()) tips = null;
+                    String replyText = nodeText(node, "reply", "replyText");
+                    if (replyText.isEmpty()) replyText = raw.trim();
+                    String translation = nullIfEmpty(nodeText(node, "translation"));
+                    String correction  = nullIfEmpty(nodeText(node, "correction"));
+                    String tips        = nullIfEmpty(nodeText(node, "tips"));
                     return new AiTutorResult(replyText, translation, correction, tips);
                 }
             } catch (Exception ex) {
-                log.warn("Failed to parse AI JSON, falling back to raw text: {}", ex.getMessage());
+                log.warn("Failed to parse AI JSON candidate, falling back to raw text: {}", ex.getMessage());
             }
         }
 
-        return new AiTutorResult(raw, null, null, null, List.of(), List.of());
+        return new AiTutorResult(raw.trim(), null, null, null, List.of(), List.of());
+    }
+
+    /** Finds the first balanced JSON object in the raw string. Returns null if none found. */
+    private static String extractJsonObject(String text) {
+        int start = text.indexOf('{');
+        if (start < 0) return null;
+        int depth = 0;
+        for (int i = start; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '{') depth++;
+            else if (c == '}') {
+                depth--;
+                if (depth == 0) return text.substring(start, i + 1);
+            }
+        }
+        return null;
+    }
+
+    private static String nodeText(com.fasterxml.jackson.databind.JsonNode node, String... keys) {
+        for (String key : keys) {
+            if (node.has(key) && !node.path(key).isNull()) {
+                String v = node.path(key).asText("").trim();
+                if (!v.isEmpty()) return v;
+            }
+        }
+        return "";
+    }
+
+    private static String nullIfEmpty(String value) {
+        return (value == null || value.isBlank()) ? null : value;
     }
 
     @Transactional

@@ -55,10 +55,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
     required Ref ref,
     required ChatRepository repository,
     required ChatAudioService audioService,
-  })  : _ref = ref,
-        _repository = repository,
-        _audioService = audioService,
-        super(const ChatState()) {
+  }) : _ref = ref,
+       _repository = repository,
+       _audioService = audioService,
+       super(const ChatState()) {
     unawaited(_initializeAudio());
   }
 
@@ -139,8 +139,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
         limit: 50,
       );
 
-      final loadedMessages =
-          history.messages.map(_toUiMessageFromApi).toList(growable: false);
+      final loadedMessages = history.messages
+          .map(_toUiMessageFromApi)
+          .toList(growable: false);
       state = state.copyWith(messages: loadedMessages, isLoading: false);
 
       final tracker = _ref.read(sessionTopicTrackerProvider.notifier);
@@ -171,9 +172,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       await _repository.deleteHistory(accessToken: token, mode: scenarioId);
-      _ref.read(sessionTopicTrackerProvider.notifier).clearInitialForTopic(
-            scenarioId,
-          );
+      _ref
+          .read(sessionTopicTrackerProvider.notifier)
+          .clearInitialForTopic(scenarioId);
       state = state.copyWith(messages: [], isLoading: false);
       await loadHistory(scenarioId, targetLanguage: targetLanguage);
     } on AppFailure catch (failure) {
@@ -182,12 +183,17 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
+  static const int _maxMessageLength = 2000;
+
   Future<void> sendMessage(
     String text,
     String scenarioId,
     String targetLanguage,
   ) async {
-    if (text.trim().isEmpty) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    if (trimmed.length > _maxMessageLength) {
+      _setError('Message is too long (max $_maxMessageLength characters).');
       return;
     }
     final token = _currentAccessToken();
@@ -197,7 +203,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
 
     state = state.copyWith(
-      messages: [...state.messages, {'role': 'user', 'content': text}],
+      messages: [
+        ...state.messages,
+        {'role': 'user', 'content': trimmed},
+      ],
       isLoading: true,
       error: null,
     );
@@ -206,7 +215,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       final response = await _repository.ask(
         accessToken: token,
         request: ChatAskRequest(
-          message: text,
+          message: trimmed,
           mode: scenarioId,
           targetLanguage: targetLanguage,
           instructionLocale: _ref.read(appLocaleProvider),
@@ -216,6 +225,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
         'role': 'ai',
         'content': response.replyText,
       };
+      if (response.translation != null) {
+        aiMap['translation'] = response.translation;
+      }
       if (response.correction != null) {
         aiMap['correction'] = response.correction;
       }
@@ -256,6 +268,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
       'role': 'ai',
       'content': initial.replyText,
     };
+    if (initial.translation != null) {
+      message['translation'] = initial.translation;
+    }
     if (initial.correction != null) {
       message['correction'] = initial.correction;
     }
@@ -268,10 +283,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   Map<String, dynamic> _toUiMessageFromApi(ChatMessage message) {
     final role = message.role == 'assistant' ? 'ai' : message.role;
-    final map = <String, dynamic>{
-      'role': role,
-      'content': message.content,
-    };
+    final map = <String, dynamic>{'role': role, 'content': message.content};
     if (message.correction != null) {
       map['correction'] = message.correction;
     }
@@ -283,6 +295,42 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   void _setError(String message) {
     state = state.copyWith(error: message);
+  }
+
+  Future<String> translateMessage({
+    required String text,
+    required String scenarioId,
+    required String targetLanguage,
+  }) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return '';
+    final token = _currentAccessToken();
+    if (token == null) {
+      _setError('Not authenticated');
+      throw const AppFailure(
+        message: 'Not authenticated',
+        code: 'auth_unauthorized',
+      );
+    }
+
+    try {
+      final response = await _repository.ask(
+        accessToken: token,
+        request: ChatAskRequest(
+          message:
+              'Translate the following text to $targetLanguage. '
+              'Return only the translated text with no extra commentary.\n\n$trimmed',
+          mode: '${scenarioId}_translation',
+          targetLanguage: targetLanguage,
+          instructionLocale: _ref.read(appLocaleProvider),
+        ),
+      );
+      final translation = (response.translation ?? response.replyText).trim();
+      return translation;
+    } on AppFailure catch (failure) {
+      _setError(failure.message);
+      rethrow;
+    }
   }
 
   @override

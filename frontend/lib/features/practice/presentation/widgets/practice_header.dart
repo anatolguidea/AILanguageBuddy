@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../../theme/app_colors.dart';
 
-/// Header for the Practice screen: title, Upgrade button, and streak (flame) badge.
 class PracticeHeader extends StatelessWidget {
   final int streakCount;
   final VoidCallback? onUpgrade;
@@ -19,74 +17,106 @@ class PracticeHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          title,
-          style: textTheme.displayMedium?.copyWith(
-                color: scheme.onSurface,
-                fontWeight: FontWeight.bold,
-              ),
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.displaySmall,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
+        const SizedBox(width: 12),
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (onUpgrade != null)
-              Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: Material(
-                  color: scheme.primary,
-                  borderRadius: BorderRadius.circular(20),
-                  child: InkWell(
-                    onTap: onUpgrade,
-                    borderRadius: BorderRadius.circular(20),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.star_rounded, color: scheme.onPrimary, size: 20),
-                          const SizedBox(width: 6),
-                          Text(
-                            upgradeLabel,
-                            style: textTheme.titleSmall?.copyWith(
-                                  color: scheme.onPrimary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.accent.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.local_fire_department, color: AppColors.accent, size: 20),
-                  const SizedBox(width: 4),
-                  Text(
-                    '$streakCount',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: AppColors.accent,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                ],
+            if (onUpgrade != null) ...[
+              _UpgradeChip(label: upgradeLabel, onTap: onUpgrade!),
+              const SizedBox(width: 8),
+            ],
+            _StreakBadge(count: streakCount),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _UpgradeChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _UpgradeChip({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          gradient: AppColors.primaryGradient,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.30),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.star_rounded, color: Colors.white, size: 14),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Outfit',
               ),
             ),
           ],
         ),
-      ],
+      ),
+    );
+  }
+}
+
+class _StreakBadge extends StatelessWidget {
+  final int count;
+
+  const _StreakBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppColors.accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.local_fire_department_rounded, color: AppColors.accent, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            '$count',
+            style: const TextStyle(
+              color: AppColors.accent,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              fontFamily: 'Outfit',
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

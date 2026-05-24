@@ -2,6 +2,7 @@ package com.example.ailanguagebuddy.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -31,12 +32,14 @@ public class VoiceServiceClient {
     private final AtomicInteger consecutiveFailures = new AtomicInteger(0);
     private volatile Instant circuitOpenUntil = Instant.EPOCH;
 
-    public VoiceServiceClient(RestClient.Builder builder) {
+    public VoiceServiceClient(
+            RestClient.Builder builder,
+            @Value("${voice.service.url:http://localhost:8000}") String voiceServiceUrl) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(CONNECT_TIMEOUT_MS);
         requestFactory.setReadTimeout(READ_TIMEOUT_MS);
         this.restClient = builder
-                .baseUrl("http://localhost:8000")
+                .baseUrl(voiceServiceUrl)
                 .requestFactory(requestFactory)
                 .build();
     }

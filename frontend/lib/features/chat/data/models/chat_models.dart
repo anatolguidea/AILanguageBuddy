@@ -10,8 +10,8 @@ class ChatAskRequest {
     required this.message,
     required this.targetLanguage,
     this.nativeLanguage = 'English',
-    this.level = 'Intermediate',
-    this.mode = 'General',
+    this.level = 'B1',
+    this.mode = 'general',
     this.instructionLocale,
   });
 
@@ -48,8 +48,16 @@ class ChatAskResponse {
       translation: _optStr(json['translation']),
       correction: _optStr(json['correction']),
       tips: _optStr(json['tips']),
-      corrections: (json['corrections'] as List?)?.map((e) => Correction.fromJson(e)).toList() ?? [],
-      vocabulary: (json['vocabulary'] as List?)?.map((e) => Vocabulary.fromJson(e)).toList() ?? [],
+      corrections:
+          (json['corrections'] as List?)
+              ?.map((e) => Correction.fromJson(e))
+              .toList() ??
+          [],
+      vocabulary:
+          (json['vocabulary'] as List?)
+              ?.map((e) => Vocabulary.fromJson(e))
+              .toList() ??
+          [],
     );
   }
 }
@@ -65,7 +73,11 @@ class Correction {
   final String corrected;
   final String explanation;
 
-  Correction({required this.original, required this.corrected, required this.explanation});
+  Correction({
+    required this.original,
+    required this.corrected,
+    required this.explanation,
+  });
 
   factory Correction.fromJson(Map<String, dynamic> json) {
     return Correction(
@@ -81,7 +93,11 @@ class Vocabulary {
   final String translation;
   final String note;
 
-  Vocabulary({required this.term, required this.translation, required this.note});
+  Vocabulary({
+    required this.term,
+    required this.translation,
+    required this.note,
+  });
 
   factory Vocabulary.fromJson(Map<String, dynamic> json) {
     return Vocabulary(
@@ -100,7 +116,11 @@ class ChatHistoryResponse {
 
   factory ChatHistoryResponse.fromJson(Map<String, dynamic> json) {
     return ChatHistoryResponse(
-      messages: (json['items'] as List?)?.map((e) => ChatMessage.fromJson(e)).toList() ?? [],
+      messages:
+          (json['items'] as List?)
+              ?.map((e) => ChatMessage.fromJson(e))
+              .toList() ??
+          [],
       nextCursor: json['nextCursor'],
     );
   }
