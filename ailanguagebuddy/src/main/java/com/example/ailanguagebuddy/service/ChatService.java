@@ -1,6 +1,7 @@
 package com.example.ailanguagebuddy.service;
 
 import com.example.ailanguagebuddy.domain.AiTutorResult;
+import com.example.ailanguagebuddy.domain.Correction;
 import com.example.ailanguagebuddy.domain.LearningContext;
 import com.example.ailanguagebuddy.model.ChatMessage;
 import com.example.ailanguagebuddy.repository.ChatMessageRepository;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Collections;
 import java.util.UUID;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 @Service
@@ -80,7 +82,7 @@ public class ChatService {
                     .getOutput()
                     .getText();
 
-            AiTutorResult result = parseTutorResult(rawResponse);
+            AiTutorResult result = parseTutorResult(rawResponse, userMessage);
 
             if (!isVoiceCall) {
                 repository.saveAndFlush(new ChatMessage(
@@ -148,7 +150,7 @@ public class ChatService {
         repository.deleteByUserIdAndMode(userId, mode == null || mode.isBlank() ? "general" : mode);
     }
 
-    private AiTutorResult parseTutorResult(String raw) {
+    private AiTutorResult parseTutorResult(String raw, String userMessage) {
         if (raw == null || raw.isBlank()) {
             return new AiTutorResult("No reply received from AI.", null, null, null, List.of(), List.of());
         }
@@ -165,9 +167,22 @@ public class ChatService {
                     String replyText = nodeText(node, "reply", "replyText");
                     if (replyText.isEmpty()) replyText = raw.trim();
                     String translation = nullIfEmpty(nodeText(node, "translation"));
-                    String correction  = nullIfEmpty(nodeText(node, "correction"));
-                    String tips        = nullIfEmpty(nodeText(node, "tips"));
-                    return new AiTutorResult(replyText, translation, correction, tips);
+                    String correction = nullIfEmpty(nodeText(node, "correction"));
+                    String tips = nullIfEmpty(nodeText(node, "tips"));
+                    List<Correction> corrections = parseCorrections(node.path("corrections"), userMessage);
+
+                    if (correction != null && isSameMeaningForCorrection(correction, userMessage)) {
+                        correction = null;
+                        tips = null;
+                    }
+
+                    if (!corrections.isEmpty()) {
+                        Correction first = corrections.get(0);
+                        correction = correction != null ? correction : first.corrected();
+                        tips = tips != null ? tips : first.explanation();
+                    }
+
+                    return new AiTutorResult(replyText, translation, correction, tips, corrections, List.of());
                 }
             } catch (Exception ex) {
                 log.warn("Failed to parse AI JSON candidate, falling back to raw text: {}", ex.getMessage());
@@ -207,6 +222,43 @@ public class ChatService {
         return (value == null || value.isBlank()) ? null : value;
     }
 
+    private static List<Correction> parseCorrections(com.fasterxml.jackson.databind.JsonNode node, String userMessage) {
+        if (node == null || !node.isArray()) {
+            return List.of();
+        }
+
+        List<Correction> corrections = new ArrayList<>();
+        for (com.fasterxml.jackson.databind.JsonNode item : node) {
+            String original = nullIfEmpty(nodeText(item, "original"));
+            String corrected = nullIfEmpty(nodeText(item, "corrected", "correction"));
+            String explanation = nullIfEmpty(nodeText(item, "explanation", "tips", "tip"));
+
+            if (original == null || corrected == null) {
+                continue;
+            }
+            if (isSameMeaningForCorrection(original, corrected) || isSameMeaningForCorrection(corrected, userMessage)) {
+                continue;
+            }
+
+            corrections.add(new Correction(original, corrected, explanation));
+        }
+        return List.copyOf(corrections);
+    }
+
+    private static boolean isSameMeaningForCorrection(String left, String right) {
+        if (left == null || right == null || right.isBlank()) {
+            return false;
+        }
+        return normalizeForCorrectionComparison(left).equals(normalizeForCorrectionComparison(right));
+    }
+
+    private static String normalizeForCorrectionComparison(String value) {
+        return value == null ? "" : value
+                .toLowerCase()
+                .replaceAll("[\\p{Punct}\\s]+", " ")
+                .trim();
+    }
+
     @Transactional
     public AiTutorResult getInitialMessage(UUID userId, LearningContext context) {
         try {
@@ -224,7 +276,7 @@ public class ChatService {
                     .getOutput()
                     .getText();
 
-            AiTutorResult result = parseTutorResult(rawResponse);
+            AiTutorResult result = parseTutorResult(rawResponse, "");
             repository.saveAndFlush(new ChatMessage(
                     result.replyText(),
                     "assistant",

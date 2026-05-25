@@ -5,14 +5,12 @@ class GrammarCorrectionCard extends StatelessWidget {
   final String incorrectText;
   final String correctedText;
   final String? explanation;
-  final VoidCallback? onExplainWhy;
 
   const GrammarCorrectionCard({
     super.key,
     required this.incorrectText,
     required this.correctedText,
     this.explanation,
-    this.onExplainWhy,
   });
 
   @override
@@ -70,23 +68,9 @@ class GrammarCorrectionCard extends StatelessWidget {
               color: primary,
             ),
           ),
-          const SizedBox(height: 6),
-          TextButton.icon(
-            onPressed: onExplainWhy,
-            style: TextButton.styleFrom(
-              foregroundColor: primary,
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              visualDensity: VisualDensity.compact,
-            ),
-            icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-            label: const Text(
-              'Explain why',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-            ),
-          ),
           if (explanation != null && explanation!.trim().isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: 6),
+              padding: const EdgeInsets.only(top: 10),
               child: Text(
                 explanation!,
                 style: TextStyle(

@@ -17,6 +17,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -391,6 +392,23 @@ class PromptBuilderTest {
     // ---------------------------------------------------------------------------
     // buildSystemPrompt — learner profile fields
     // ---------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("buildSystemPrompt — topic mode normalization")
+    class BuildSystemPromptTopicModeNormalization {
+
+        @Test
+        @DisplayName("language-suffixed mode resolves base topic")
+        void languageSuffixedMode_resolvesBaseTopic() {
+            stubTopicForSystemPrompt("chef", "Chef", "Chef-specific instruction.");
+            var ctx = new LearningContext("English", "Romanian", "B1", "chef_en", "en");
+
+            String prompt = promptBuilder.buildSystemPrompt(ctx, "", "I cook pasta");
+
+            assertThat(prompt).contains("Chef-specific instruction.");
+            verify(topicConfigService).getTopic("chef");
+        }
+    }
 
     @Nested
     @DisplayName("buildSystemPrompt — learner profile")

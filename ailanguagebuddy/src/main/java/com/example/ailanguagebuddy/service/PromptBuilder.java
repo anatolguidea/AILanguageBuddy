@@ -23,9 +23,10 @@ public class PromptBuilder {
         String nativeLang = orDefault(effective.nativeLanguage(), "the learner's native language");
         String level = orDefault(effective.level(), "B1");
         String mode = orDefault(effective.mode(), "general");
+        String topicId = normalizeTopicMode(mode);
         boolean instructionRo = effective.instructionLocale() != null && effective.instructionLocale().toLowerCase().startsWith("ro");
 
-        String topicInstruction = topicConfigService.getTopic(mode)
+        String topicInstruction = topicConfigService.getTopic(topicId)
                 .map(t -> t.instruction())
                 .orElse("You are a supportive language tutor. Have a natural conversation.");
         String topicsBlock = topicConfigService.getTopicsContextBlock();
@@ -69,17 +70,19 @@ public class PromptBuilder {
             - %s
             - Use the history to resolve pronouns.
             - Reply in a tutor style: acknowledge what they said, add a short encouraging or clarifying sentence, and optionally ask a follow-up question or suggest something to talk about. Aim for 2–4 sentences (about 40–55 words). Keep it natural and conversational, not robotic.
-            - If the user made grammar/vocabulary mistakes, provide the corrected version and a brief tip.
+            - Grammar correction policy: evaluate ONLY the Current User Input. Preserve the user's meaning. Correct grammar, word choice, spelling, and target-language phrasing only when there is a clear learner mistake. Do not rewrite for style. If the input is already acceptable, return "" for "correction", "" for "tips", and [] for "corrections".
+            - If there is one clear mistake, set "correction" to the full corrected version of the user's last message and "tips" to one short explanation. If there are multiple mistakes, also include each one in "corrections".
             - Include a translation only when useful for the learner's native language; otherwise use an empty string.
             - Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
-            {"reply": "your spoken reply in the target language", "translation": "translation of reply in native language or empty string", "correction": "corrected version of user's last message or empty string if no errors", "tips": "brief grammar or vocabulary tip or empty string"}
+            {"reply": "your spoken reply in the target language", "translation": "translation of reply in native language or empty string", "correction": "full corrected version of user's last message or empty string if no errors", "tips": "brief grammar or vocabulary tip or empty string", "corrections": [{"original": "exact mistaken text", "corrected": "corrected text", "explanation": "why this is better"}]}
 
             - "reply" must be ONLY in the target language (%s). Do not mix languages. For voice mode, never reply in English when the target is another language.
             - "translation" should be in %s only when it helps comprehension. If not needed, return "".
             - "correction" must be the full corrected sentence of the user's last message, or "" if no correction needed.
-            - "tips" must be one short sentence (e.g. Use "went" for past tense of "go"). Use double quotes for examples; avoid backslash-escaping. Use "" if no tip.
+            - "tips" must be one short sentence explaining the correction. Use double quotes for examples; avoid backslash-escaping. Use "" if no tip.
+            - "corrections" must be [] if no correction is needed. Never put the same text in "original" and "corrected".
             %s
-            """.formatted(mode, topicsBlock, topicInstruction, safeHistory, target, safeCurrent, target, nativeLang, level, liveVoiceInstruction,
+            """.formatted(topicId, topicsBlock, topicInstruction, safeHistory, target, safeCurrent, target, nativeLang, level, liveVoiceInstruction,
                     target, nativeLang, instructionLanguageRule.isBlank() ? "" : "\n" + instructionLanguageRule);
     }
 
@@ -89,7 +92,7 @@ public class PromptBuilder {
         String target = orDefault(effective.targetLanguage(), "the target language");
         String nativeLang = orDefault(effective.nativeLanguage(), "the learner's native language");
         String level = orDefault(effective.level(), "B1");
-        String mode = orDefault(effective.mode(), "general");
+        String mode = normalizeTopicMode(orDefault(effective.mode(), "general"));
 
         String topicInstruction = topicConfigService.getTopic(mode)
                 .map(t -> t.instruction())
@@ -112,6 +115,13 @@ public class PromptBuilder {
 
     private static String orDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private static String normalizeTopicMode(String mode) {
+        if (mode == null || mode.isBlank()) {
+            return "general";
+        }
+        return mode.trim().replaceFirst("_(en|ro|es|fr|de|it|pt|ru|ja|zh)$", "");
     }
 
     /**

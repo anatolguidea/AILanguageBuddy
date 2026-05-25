@@ -228,11 +228,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
       if (response.translation != null) {
         aiMap['translation'] = response.translation;
       }
-      if (response.correction != null) {
-        aiMap['correction'] = response.correction;
+      final primaryCorrection = response.corrections.isNotEmpty
+          ? response.corrections.first
+          : null;
+      final correction = primaryCorrection?.corrected ?? response.correction;
+      final tips = primaryCorrection?.explanation ?? response.tips;
+      if (correction != null) {
+        aiMap['correction'] = correction;
       }
-      if (response.tips != null) {
-        aiMap['tips'] = response.tips;
+      if (tips != null) {
+        aiMap['tips'] = tips;
       }
       state = state.copyWith(
         messages: [...state.messages, aiMap],
@@ -270,12 +275,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
     };
     if (initial.translation != null) {
       message['translation'] = initial.translation;
-    }
-    if (initial.correction != null) {
-      message['correction'] = initial.correction;
-    }
-    if (initial.tips != null) {
-      message['tips'] = initial.tips;
     }
     state = state.copyWith(messages: [...state.messages, message]);
     _ref.read(sessionTopicTrackerProvider.notifier).markInitialSent(scenarioId);

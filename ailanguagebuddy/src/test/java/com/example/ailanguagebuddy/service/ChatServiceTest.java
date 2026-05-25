@@ -287,6 +287,45 @@ class ChatServiceTest {
         }
 
         @Test
+        @DisplayName("structured corrections are parsed and exposed through flat compatibility fields")
+        void structuredCorrections_parsedAndExposedThroughFlatFields() {
+            UUID userId = UUID.randomUUID();
+            String json = """
+                    {"reply":"Good try!","translation":"","correction":"","tips":"","corrections":[{"original":"I goes home","corrected":"I go home","explanation":"Use go with I in the present simple."}]}
+                    """;
+            stubPromptBuilder();
+            stubLlmResponse(json);
+            when(repository.findByUserIdAndModeOrderByCreatedAtDesc(any(), any(), any()))
+                    .thenReturn(Collections.emptyList());
+            when(repository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            AiTutorResult result = chatService.askLanguageCoach("I goes home", userId, defaultCtx());
+
+            assertThat(result.corrections()).hasSize(1);
+            assertThat(result.corrections().get(0).original()).isEqualTo("I goes home");
+            assertThat(result.correction()).isEqualTo("I go home");
+            assertThat(result.tips()).isEqualTo("Use go with I in the present simple.");
+        }
+
+        @Test
+        @DisplayName("same-as-user correction is ignored")
+        void sameAsUserCorrection_ignored() {
+            UUID userId = UUID.randomUUID();
+            String json = "{\"reply\":\"Nice sentence.\",\"translation\":\"\",\"correction\":\"I cook pasta.\",\"tips\":\"Looks good.\"}";
+            stubPromptBuilder();
+            stubLlmResponse(json);
+            when(repository.findByUserIdAndModeOrderByCreatedAtDesc(any(), any(), any()))
+                    .thenReturn(Collections.emptyList());
+            when(repository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            AiTutorResult result = chatService.askLanguageCoach("I cook pasta", userId, defaultCtx());
+
+            assertThat(result.correction()).isNull();
+            assertThat(result.tips()).isNull();
+            assertThat(result.corrections()).isEmpty();
+        }
+
+        @Test
         @DisplayName("markdown-wrapped JSON (```json\\n{...}\\n```) is stripped and parsed")
         void markdownWrappedJson_isStrippedAndParsed() {
             UUID userId = UUID.randomUUID();

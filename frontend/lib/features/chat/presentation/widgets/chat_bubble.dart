@@ -44,7 +44,7 @@ class ChatBubble extends StatefulWidget {
 }
 
 class _ChatBubbleState extends State<ChatBubble> {
-  bool _showExplanation = false;
+  bool _showGrammar = false;
 
   bool get _hasCorrection =>
       widget.correction != null && widget.correction!.trim().isNotEmpty;
@@ -144,86 +144,40 @@ class _ChatBubbleState extends State<ChatBubble> {
                           ),
                           if (!widget.isUser &&
                               (widget.onPlay != null ||
-                                  widget.onTranslate != null)) ...[
+                                  widget.onTranslate != null ||
+                                  _hasCorrection)) ...[
                             const SizedBox(height: 8),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 6,
                               children: [
                                 if (widget.onPlay != null)
-                                  InkWell(
+                                  _MessageAction(
                                     onTap: widget.onPlay,
-                                    borderRadius: BorderRadius.circular(999),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.volume_up_rounded,
-                                            size: 16,
-                                            color: primary,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            widget.listenLabel ?? 'Listen',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w700,
-                                              color: primary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
+                                    icon: Icons.volume_up_rounded,
+                                    label: widget.listenLabel ?? 'Listen',
+                                    color: primary,
                                   ),
-                                if (widget.onTranslate != null) ...[
-                                  const SizedBox(width: 10),
-                                  InkWell(
+                                if (widget.onTranslate != null)
+                                  _MessageAction(
                                     onTap: widget.isTranslating
                                         ? null
                                         : widget.onTranslate,
-                                    borderRadius: BorderRadius.circular(999),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (widget.isTranslating)
-                                            SizedBox(
-                                              width: 14,
-                                              height: 14,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: primary,
-                                              ),
-                                            )
-                                          else
-                                            Icon(
-                                              Icons.translate_rounded,
-                                              size: 16,
-                                              color: primary,
-                                            ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            widget.translateLabel ??
-                                                'Translate',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w700,
-                                              color: primary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
+                                    icon: Icons.translate_rounded,
+                                    label: widget.translateLabel ?? 'Translate',
+                                    color: primary,
+                                    isLoading: widget.isTranslating,
                                   ),
-                                ],
+                                if (_hasCorrection)
+                                  _MessageAction(
+                                    onTap: () => setState(
+                                      () => _showGrammar = !_showGrammar,
+                                    ),
+                                    icon: Icons.auto_fix_high_rounded,
+                                    label: widget.correctionLabel ?? 'Grammar',
+                                    color: primary,
+                                    isSelected: _showGrammar,
+                                  ),
                               ],
                             ),
                           ],
@@ -261,41 +215,16 @@ class _ChatBubbleState extends State<ChatBubble> {
                         ],
                       ),
                     ),
-                    if (!widget.isUser && _hasCorrection) ...[
+                    if (!widget.isUser && _hasCorrection && _showGrammar) ...[
                       const SizedBox(height: 8),
                       GrammarCorrectionCard(
                             incorrectText: widget.incorrectText ?? '',
                             correctedText: widget.correction!,
-                            explanation: _showExplanation ? widget.tips : null,
-                            onExplainWhy: () {
-                              setState(
-                                () => _showExplanation = !_showExplanation,
-                              );
-                            },
+                            explanation: _hasTips ? widget.tips : null,
                           )
                           .animate()
                           .fadeIn(duration: 350.ms)
                           .slideY(begin: 0.08, end: 0, duration: 350.ms),
-                    ],
-                    if (!widget.isUser && (_hasCorrection || _hasTips)) ...[
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          const _FeedbackPill(
-                            icon: Icons.check_circle_rounded,
-                            label: 'Good effort!',
-                            tint: Color(0xFF10B981),
-                          ),
-                          if (_hasTips)
-                            _FeedbackPill(
-                              icon: Icons.lightbulb_rounded,
-                              label: widget.tipLabel ?? 'Past Tense Tip',
-                              tint: Colors.amber,
-                            ),
-                        ],
-                      ),
                     ],
                   ],
                 ),
@@ -310,6 +239,76 @@ class _ChatBubbleState extends State<ChatBubble> {
         .animate()
         .fadeIn(duration: 300.ms)
         .slideY(begin: 0.06, end: 0, duration: 300.ms);
+  }
+}
+
+class _MessageAction extends StatelessWidget {
+  final VoidCallback? onTap;
+  final IconData icon;
+  final String label;
+  final Color color;
+  final bool isLoading;
+  final bool isSelected;
+
+  const _MessageAction({
+    required this.onTap,
+    required this.icon,
+    required this.label,
+    required this.color,
+    this.isLoading = false,
+    this.isSelected = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveColor = onTap == null
+        ? color.withValues(alpha: 0.45)
+        : color;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: ShapeDecoration(
+          shape: StadiumBorder(
+            side: BorderSide(
+              color: isSelected
+                  ? color.withValues(alpha: 0.3)
+                  : Colors.transparent,
+            ),
+          ),
+          color: isSelected
+              ? color.withValues(alpha: 0.08)
+              : Colors.transparent,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isLoading)
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: effectiveColor,
+                ),
+              )
+            else
+              Icon(icon, size: 16, color: effectiveColor),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: effectiveColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -341,44 +340,3 @@ class _Avatar extends StatelessWidget {
     );
   }
 }
-
-class _FeedbackPill extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color tint;
-
-  const _FeedbackPill({
-    required this.icon,
-    required this.label,
-    required this.tint,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: ShapeDecoration(
-        shape: StadiumBorder(
-          side: BorderSide(color: tint.withValues(alpha: 0.25)),
-        ),
-        color: tint.withValues(alpha: 0.1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: tint),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: tint,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-

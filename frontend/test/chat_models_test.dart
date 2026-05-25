@@ -13,4 +13,27 @@ void main() {
       expect(request.toJson()['mode'], 'general');
     });
   });
+
+  group('ChatAskResponse', () {
+    test('parses structured corrections', () {
+      final response = ChatAskResponse.fromJson({
+        'replyText': 'Good try!',
+        'corrections': [
+          {
+            'original': 'I goes home',
+            'corrected': 'I go home',
+            'explanation': 'Use go with I in the present simple.',
+          },
+        ],
+      });
+
+      expect(response.corrections, hasLength(1));
+      expect(response.corrections.first.original, 'I goes home');
+      expect(response.corrections.first.corrected, 'I go home');
+      expect(
+        response.corrections.first.explanation,
+        'Use go with I in the present simple.',
+      );
+    });
+  });
 }

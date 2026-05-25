@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/semantics.dart';
@@ -54,7 +53,7 @@ final liveSpeechProvider =
 /// language there, we reconnect so LLM and TTS use the new language.
 final voiceTargetLanguageCodeProvider = Provider<String>((ref) {
   final lang = ref.watch(languageProvider);
-  return _normalizeLangCode(lang.code ?? 'en');
+  return _normalizeLangCode(lang.code);
 });
 
 /// When mounted (e.g. in shell), listens to language changes and reconnects voice WS so
@@ -104,6 +103,14 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
   StreamSubscription? _recorderSubscription;
   String _lastAudioCodec = 'pcm16';
   int _lastAudioSampleRate = 24000;
+  bool _isRecording = false;
+  bool _isStartingRecording = false;
+  bool _stopRequestedWhileStarting = false;
+  DateTime? _recordingStartedAt;
+  int _recordedBytes = 0;
+
+  static const int _minimumRecordingMs = 700;
+  static const int _minimumRecordingBytes = 12000;
 
   LiveSpeechNotifier(this._ref) : super(LiveSpeechState()) {
     _init();
@@ -177,7 +184,19 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
               }
             } else if (message.startsWith('TEXT:')) {
               final text = message.substring(5).trim();
-              state = state.copyWith(lastTranscript: text);
+              state = state.copyWith(
+                status: VoiceState.speaking,
+                lastTranscript: text,
+                errorMessage: null,
+              );
+            } else if (message.startsWith('ERROR:')) {
+              final error = message.substring(6).trim();
+              state = state.copyWith(
+                status: VoiceState.error,
+                errorMessage: error == 'No speech detected'
+                    ? 'No speech detected. Hold the button and speak clearly.'
+                    : error,
+              );
             }
           } else {
             debugPrint(
@@ -246,6 +265,9 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
   }
 
   Future<void> startRecording() async {
+    if (_isRecording || _isStartingRecording) return;
+    _isStartingRecording = true;
+    _stopRequestedWhileStarting = false;
     var status = await Permission.microphone.status;
     if (status.isDenied) {
       status = await Permission.microphone.request();
@@ -257,6 +279,7 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
         errorMessage: "Mic permission permanently denied. Open Settings.",
       );
       await openAppSettings();
+      _isStartingRecording = false;
       return;
     }
 
@@ -265,34 +288,80 @@ class LiveSpeechNotifier extends StateNotifier<LiveSpeechState> {
         status: VoiceState.error,
         errorMessage: "Mic permission denied",
       );
+      _isStartingRecording = false;
       return;
     }
 
     if (_channel == null) await connect();
 
     state = state.copyWith(status: VoiceState.listening);
+    _isRecording = true;
+    _recordingStartedAt = DateTime.now();
+    _recordedBytes = 0;
 
     // Create a StreamController to receive audio from recorder and forward to WS
     final recordingDataController = StreamController<Uint8List>();
     _recorderSubscription = recordingDataController.stream.listen((buffer) {
+      _recordedBytes += buffer.length;
       if (_channel != null) {
         _channel!.sink.add(buffer);
       }
     });
 
-    await _recorder!.startRecorder(
-      toStream: recordingDataController.sink,
-      codec: Codec.pcm16,
-      numChannels: 1,
-      sampleRate: 16000,
-    );
+    try {
+      await _recorder!.startRecorder(
+        toStream: recordingDataController.sink,
+        codec: Codec.pcm16,
+        numChannels: 1,
+        sampleRate: 16000,
+      );
+    } catch (e) {
+      _isRecording = false;
+      _isStartingRecording = false;
+      _stopRequestedWhileStarting = false;
+      await _recorderSubscription?.cancel();
+      _recorderSubscription = null;
+      state = state.copyWith(
+        status: VoiceState.error,
+        errorMessage: 'Could not start recording: $e',
+      );
+      return;
+    }
+    _isStartingRecording = false;
+
+    if (_stopRequestedWhileStarting) {
+      _stopRequestedWhileStarting = false;
+      await stopRecording();
+    }
   }
 
   Future<void> stopRecording() async {
+    if (_isStartingRecording && !_isRecording) {
+      _stopRequestedWhileStarting = true;
+      return;
+    }
+    if (!_isRecording) return;
+    final startedAt = _recordingStartedAt;
+    _isRecording = false;
     await _recorder!.stopRecorder();
     if (_recorderSubscription != null) {
       await _recorderSubscription!.cancel();
       _recorderSubscription = null;
+    }
+
+    final elapsedMs = startedAt == null
+        ? 0
+        : DateTime.now().difference(startedAt).inMilliseconds;
+    if (elapsedMs < _minimumRecordingMs ||
+        _recordedBytes < _minimumRecordingBytes) {
+      debugPrint(
+        'Voice recording too short: ${elapsedMs}ms, $_recordedBytes bytes',
+      );
+      state = state.copyWith(
+        status: VoiceState.idle,
+        errorMessage: "Hold a little longer and speak clearly.",
+      );
+      return;
     }
 
     // Send End-Of-Speech signal
@@ -351,7 +420,9 @@ void _showAppLanguagePicker(BuildContext context, WidgetRef ref) {
                     : Icons.circle_outlined,
                 color: current == AppLocaleNotifier.en
                     ? Theme.of(ctx).colorScheme.primary
-                    : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.5),
+                    : Theme.of(
+                        ctx,
+                      ).colorScheme.onSurface.withValues(alpha: 0.5),
                 size: 22,
               ),
               title: const Text('English'),
@@ -367,7 +438,9 @@ void _showAppLanguagePicker(BuildContext context, WidgetRef ref) {
                     : Icons.circle_outlined,
                 color: current == AppLocaleNotifier.ro
                     ? Theme.of(ctx).colorScheme.primary
-                    : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.5),
+                    : Theme.of(
+                        ctx,
+                      ).colorScheme.onSurface.withValues(alpha: 0.5),
                 size: 22,
               ),
               title: const Text('Română'),
@@ -398,7 +471,7 @@ class LiveSpeechPage extends ConsumerWidget {
 
     // When effective language changes (or on first open), connect/reconnect with current target language
     ref.listen(voiceTargetLanguageCodeProvider, (prev, next) {
-      if (next == null || next.isEmpty) return;
+      if (next.isEmpty) return;
       if (prev == null) {
         // First time opening voice screen: connect with current language (e.g. from lecon topic)
         notifier.connect(targetLanguageCode: next);
@@ -417,19 +490,20 @@ class LiveSpeechPage extends ConsumerWidget {
     });
 
     final isRecording = speechState.status == VoiceState.listening;
-    final isWarming  = speechState.status == VoiceState.warming;
+    final isWarming = speechState.status == VoiceState.warming;
     final voiceButtonLabel = isRecording
         ? 'Stop recording and process audio'
         : isWarming
-            ? 'Voice models warming up, please wait'
-            : 'Start voice recording';
+        ? 'Voice models warming up, please wait'
+        : 'Start voice recording';
     final voiceButtonHint = isRecording
         ? 'Release to stop recording and send audio for processing'
         : isWarming
-            ? 'Models are loading, please wait a moment'
-            : 'Press and hold to record your voice';
+        ? 'Models are loading, please wait a moment'
+        : 'Press and hold to record your voice';
 
-    final isActiveSession = speechState.status == VoiceState.listening ||
+    final isActiveSession =
+        speechState.status == VoiceState.listening ||
         speechState.status == VoiceState.processing ||
         speechState.status == VoiceState.speaking;
 
@@ -462,158 +536,174 @@ class LiveSpeechPage extends ConsumerWidget {
         }
       },
       child: Scaffold(
-      backgroundColor: scheme.surface,
-      appBar: AppBar(
         backgroundColor: scheme.surface,
-        elevation: 0,
-        title: Text(s.liveAssistant, style: TextStyle(color: scheme.onSurface)),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.language_rounded, color: scheme.onSurface),
-            onPressed: () => _showAppLanguagePicker(context, ref),
-            tooltip: s.appLanguage,
+        appBar: AppBar(
+          backgroundColor: scheme.surface,
+          elevation: 0,
+          title: Text(
+            s.liveAssistant,
+            style: TextStyle(color: scheme.onSurface),
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: FocusTraversalGroup(
-                  policy: OrderedTraversalPolicy(),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(height: 16),
-                      // AI speech bubble at the top with current reply text
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(1),
-                        child: Semantics(
-                          container: true,
-                          liveRegion: true,
-                          label: 'Assistant response',
-                          child: Align(
-                            alignment: Alignment.topCenter,
-                            child: AnimatedOpacity(
-                              duration: const Duration(milliseconds: 200),
-                              opacity: speechState.lastTranscript.isEmpty
-                                  ? 0.0
-                                  : 1.0,
-                              child: Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: isDark
-                                      ? Colors.white.withOpacity(0.06)
-                                      : scheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
+          actions: [
+            IconButton(
+              icon: Icon(Icons.language_rounded, color: scheme.onSurface),
+              onPressed: () => _showAppLanguagePicker(context, ref),
+              tooltip: s.appLanguage,
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: FocusTraversalGroup(
+                    policy: OrderedTraversalPolicy(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(height: 16),
+                        // AI speech bubble at the top with current reply text
+                        FocusTraversalOrder(
+                          order: const NumericFocusOrder(1),
+                          child: Semantics(
+                            container: true,
+                            liveRegion: true,
+                            label: 'Assistant response',
+                            child: Align(
+                              alignment: Alignment.topCenter,
+                              child: AnimatedOpacity(
+                                duration: const Duration(milliseconds: 200),
+                                opacity: speechState.lastTranscript.isEmpty
+                                    ? 0.0
+                                    : 1.0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
                                     color: isDark
-                                        ? Colors.white24
-                                        : scheme.outlineVariant,
+                                        ? Colors.white.withValues(alpha: 0.06)
+                                        : scheme.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: isDark
+                                          ? Colors.white24
+                                          : scheme.outlineVariant,
+                                    ),
                                   ),
+                                  child: Text(
+                                    speechState.lastTranscript.isEmpty
+                                        ? s.tapHoldToSpeak
+                                        : speechState.lastTranscript,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: scheme.onSurface,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        if (speechState.errorMessage != null)
+                          FocusTraversalOrder(
+                            order: const NumericFocusOrder(2),
+                            child: Semantics(
+                              liveRegion: true,
+                              label: 'Voice error',
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
                                 ),
                                 child: Text(
-                                  speechState.lastTranscript.isEmpty
-                                      ? s.tapHoldToSpeak
-                                      : speechState.lastTranscript,
+                                  speechState.errorMessage!,
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
-                                    color: scheme.onSurface,
-                                    fontSize: 16,
+                                    color: scheme.error,
+                                    fontSize: 14,
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      if (speechState.errorMessage != null)
                         FocusTraversalOrder(
-                          order: const NumericFocusOrder(2),
-                          child: Semantics(
-                            liveRegion: true,
-                            label: 'Voice error',
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              child: Text(
-                                speechState.errorMessage!,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: scheme.error,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(3),
-                        child: MergeSemantics(
-                          child: Semantics(
-                            button: true,
-                            enabled: true,
-                            label: voiceButtonLabel,
-                            hint: voiceButtonHint,
-                            child: GestureDetector(
-                              onLongPressStart: isWarming ? null : (_) => notifier.startRecording(),
-                              onLongPressEnd: isWarming ? null : (_) => notifier.stopRecording(),
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  minWidth: 48,
-                                  minHeight: 48,
-                                ),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 300),
-                                  width:
-                                      speechState.status == VoiceState.speaking
-                                      ? 220
-                                      : 200,
-                                  height:
-                                      speechState.status == VoiceState.speaking
-                                      ? 220
-                                      : 200,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: _getColor(
-                                      speechState.status,
-                                      scheme,
-                                    ),
-                                    boxShadow: [
-                                      if (speechState.status ==
-                                              VoiceState.listening ||
-                                          speechState.status ==
-                                              VoiceState.speaking)
-                                        BoxShadow(
-                                          color: scheme.primary.withOpacity(
-                                            speechState.status ==
-                                                    VoiceState.speaking
-                                                ? 0.8
-                                                : 0.5,
-                                          ),
-                                          blurRadius:
-                                              speechState.status ==
-                                                  VoiceState.speaking
-                                              ? 60
-                                              : 40,
-                                          spreadRadius:
-                                              speechState.status ==
-                                                  VoiceState.speaking
-                                              ? 30
-                                              : 20,
-                                        ),
-                                    ],
+                          order: const NumericFocusOrder(3),
+                          child: MergeSemantics(
+                            child: Semantics(
+                              button: true,
+                              enabled: true,
+                              label: voiceButtonLabel,
+                              hint: voiceButtonHint,
+                              child: GestureDetector(
+                                onTapDown: isWarming
+                                    ? null
+                                    : (_) => notifier.startRecording(),
+                                onTapUp: isWarming
+                                    ? null
+                                    : (_) => notifier.stopRecording(),
+                                onTapCancel: isWarming
+                                    ? null
+                                    : () => notifier.stopRecording(),
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    minWidth: 48,
+                                    minHeight: 48,
                                   ),
-                                  child: ExcludeSemantics(
-                                    child: Icon(
-                                      _getIcon(speechState.status),
-                                      size: 80,
-                                      color: _getIconColor(
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 300),
+                                    width:
+                                        speechState.status ==
+                                            VoiceState.speaking
+                                        ? 220
+                                        : 200,
+                                    height:
+                                        speechState.status ==
+                                            VoiceState.speaking
+                                        ? 220
+                                        : 200,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: _getColor(
                                         speechState.status,
                                         scheme,
+                                      ),
+                                      boxShadow: [
+                                        if (speechState.status ==
+                                                VoiceState.listening ||
+                                            speechState.status ==
+                                                VoiceState.speaking)
+                                          BoxShadow(
+                                            color: scheme.primary.withValues(
+                                              alpha:
+                                                  speechState.status ==
+                                                      VoiceState.speaking
+                                                  ? 0.8
+                                                  : 0.5,
+                                            ),
+                                            blurRadius:
+                                                speechState.status ==
+                                                    VoiceState.speaking
+                                                ? 60
+                                                : 40,
+                                            spreadRadius:
+                                                speechState.status ==
+                                                    VoiceState.speaking
+                                                ? 30
+                                                : 20,
+                                          ),
+                                      ],
+                                    ),
+                                    child: ExcludeSemantics(
+                                      child: Icon(
+                                        _getIcon(speechState.status),
+                                        size: 80,
+                                        color: _getIconColor(
+                                          speechState.status,
+                                          scheme,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -622,81 +712,80 @@ class LiveSpeechPage extends ConsumerWidget {
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 40),
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(4),
-                        child: Semantics(
-                          header: true,
-                          liveRegion: true,
-                          child: Text(
-                            _getStatusText(speechState.status, s),
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              color: scheme.onSurface,
+                        const SizedBox(height: 40),
+                        FocusTraversalOrder(
+                          order: const NumericFocusOrder(4),
+                          child: Semantics(
+                            header: true,
+                            liveRegion: true,
+                            child: Text(
+                              _getStatusText(speechState.status, s),
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                color: scheme.onSurface,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 20),
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(5),
-                        child: Text(
-                          s.holdToSpeak,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        const SizedBox(height: 20),
+                        FocusTraversalOrder(
+                          order: const NumericFocusOrder(5),
+                          child: Text(
+                            s.holdToSpeak,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: scheme.onSurfaceVariant),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 32),
-                    ],
+                        const SizedBox(height: 32),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
-    ),
     );
   }
 
   Color _getColor(VoiceState status, ColorScheme scheme) {
     return switch (status) {
-      VoiceState.listening  => scheme.primary,
+      VoiceState.listening => scheme.primary,
       VoiceState.processing => AppColors.secondary,
-      VoiceState.speaking   => Colors.green,
-      VoiceState.error      => scheme.error,
-      VoiceState.warming    => Colors.orange,
-      VoiceState.idle       => scheme.surfaceContainerHighest,
+      VoiceState.speaking => Colors.green,
+      VoiceState.error => scheme.error,
+      VoiceState.warming => Colors.orange,
+      VoiceState.idle => scheme.surfaceContainerHighest,
     };
   }
 
   IconData _getIcon(VoiceState status) {
     return switch (status) {
-      VoiceState.listening  => FontAwesomeIcons.microphoneLines,
+      VoiceState.listening => FontAwesomeIcons.microphoneLines,
       VoiceState.processing => FontAwesomeIcons.brain,
-      VoiceState.speaking   => FontAwesomeIcons.volumeHigh,
-      VoiceState.warming    => FontAwesomeIcons.hourglass,
+      VoiceState.speaking => FontAwesomeIcons.volumeHigh,
+      VoiceState.warming => FontAwesomeIcons.hourglass,
       VoiceState.idle || VoiceState.error => FontAwesomeIcons.microphone,
     };
   }
 
   Color _getIconColor(VoiceState status, ColorScheme scheme) {
     return switch (status) {
-      VoiceState.listening  => scheme.onPrimary,
+      VoiceState.listening => scheme.onPrimary,
       VoiceState.processing => scheme.onSecondary,
-      VoiceState.speaking   => Colors.white,
-      VoiceState.error      => scheme.onError,
-      VoiceState.warming    => Colors.white,
-      VoiceState.idle       => scheme.onSurface,
+      VoiceState.speaking => Colors.white,
+      VoiceState.error => scheme.onError,
+      VoiceState.warming => Colors.white,
+      VoiceState.idle => scheme.onSurface,
     };
   }
 
   String _getStatusText(VoiceState status, AppStringsData s) {
     return switch (status) {
-      VoiceState.listening  => s.listening,
+      VoiceState.listening => s.listening,
       VoiceState.processing => s.liveThinking,
-      VoiceState.speaking   => s.liveSpeaking,
-      VoiceState.warming    => 'Warming up…',
+      VoiceState.speaking => s.liveSpeaking,
+      VoiceState.warming => 'Warming up…',
       VoiceState.idle || VoiceState.error => s.tapHoldToSpeak,
     };
   }
